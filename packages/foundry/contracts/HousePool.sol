@@ -5,25 +5,8 @@ import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
 
-/// @title IUniswapV2Router02 - Minimal interface for swaps
-interface IUniswapV2Router02 {
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-    
-    function getAmountsOut(
-        uint256 amountIn, 
-        address[] calldata path
-    ) external view returns (uint256[] memory amounts);
-}
-
 /// @title HousePool - Simplified gambling pool where LP tokens = house ownership
 /// @notice Deposit USDC to become the house. Share price grows as house profits.
-/// @dev Auto buyback & burn on reveals keeps Uniswap price synced
 contract HousePool is ERC20, Ownable {
     /* ========== CUSTOM ERRORS ========== */
     error InsufficientPool();
@@ -35,14 +18,12 @@ contract HousePool is ERC20, Ownable {
     error WithdrawalExpired();
     error NoPendingWithdrawal();
     error InsufficientShares();
-    error AlreadySeeded();
     error ZeroAmount();
     error TransferFailed();
 
     /* ========== STATE VARIABLES ========== */
     
     IERC20 public immutable usdc;
-    IUniswapV2Router02 public uniswapRouter;
     
     // Withdrawal tracking
     struct WithdrawalRequest {
@@ -59,9 +40,6 @@ contract HousePool is ERC20, Ownable {
         uint256 blockNumber;
     }
     mapping(address => Commitment) public commits;
-    
-    // Bootstrap tracking
-    bool public liquiditySeeded;
 
     /* ========== CONSTANTS ========== */
     
@@ -71,12 +49,11 @@ contract HousePool is ERC20, Ownable {
     uint256 public constant WIN_MODULO = 11;        // 1/11 ≈ 9% win rate, 9% house edge
     
     // Pool thresholds
-    uint256 public constant MIN_RESERVE = 100e6;    // 100 USDC minimum for payouts
-    uint256 public constant BUYBACK_THRESHOLD = 150e6; // 150 USDC triggers buyback
+    uint256 public constant MIN_RESERVE = 5e6;      // 5 USDC minimum after payout
     
     // Withdrawal timing
-    uint256 public constant WITHDRAWAL_DELAY = 5 minutes;
-    uint256 public constant WITHDRAWAL_WINDOW = 24 hours;
+    uint256 public constant WITHDRAWAL_DELAY = 10 seconds;
+    uint256 public constant WITHDRAWAL_WINDOW = 1 minutes;
     
     // First deposit minimum (prevents share manipulation attack)
     uint256 public constant MIN_FIRST_DEPOSIT = 1e6; // 1 USDC
@@ -89,21 +66,15 @@ contract HousePool is ERC20, Ownable {
     event WithdrawalExpiredCleanup(address indexed lp, uint256 shares);
     event Withdraw(address indexed lp, uint256 sharesIn, uint256 usdcOut);
     event RollCommitted(address indexed player, bytes32 commitment);
+    event RollCancelled(address indexed player, uint256 refund);
     event RollRevealed(address indexed player, bool won, uint256 payout);
-    event BuybackAndBurn(uint256 usdcSpent, uint256 houseBurned);
-    event LiquiditySeeded(address indexed to, uint256 amount);
-    event UniswapRouterSet(address indexed router);
 
     /* ========== CONSTRUCTOR ========== */
     
     constructor(
-        address _usdc,
-        address _uniswapRouter
+        address _usdc
     ) ERC20("HouseShare", "HOUSE") Ownable(msg.sender) {
         usdc = IERC20(_usdc);
-        if (_uniswapRouter != address(0)) {
-            uniswapRouter = IUniswapV2Router02(_uniswapRouter);
-        }
     }
 
     /* ========== LP FUNCTIONS ========== */
@@ -173,8 +144,10 @@ contract HousePool is ERC20, Ownable {
         
         usdcOut = (req.shares * pool) / supply;
         
-        // Ensure we keep minimum reserve for payouts
-        if (pool - usdcOut < MIN_RESERVE) revert InsufficientPool();
+        // Ensure we keep minimum reserve for payouts, UNLESS pool is being fully drained
+        // (if pool goes to 0, that's fine - rolling will be disabled anyway)
+        uint256 remainingPool = pool - usdcOut;
+        if (remainingPool > 0 && remainingPool < MIN_RESERVE) revert InsufficientPool();
         
         totalPendingShares -= req.shares;
         delete withdrawals[msg.sender];
@@ -231,24 +204,43 @@ contract HousePool is ERC20, Ownable {
         
         emit RollCommitted(msg.sender, commitHash);
     }
+
+    /// @notice Cancel expired commit and get refund (after 256 blocks)
+    function cancelCommit() external {
+        Commitment memory c = commits[msg.sender];
+        
+        if (c.blockNumber == 0) revert NoCommitment();
+        if (block.number <= c.blockNumber + 256) revert TooEarly(); // Must wait for expiry
+        
+        delete commits[msg.sender];
+        
+        // Refund the roll cost
+        bool success = usdc.transfer(msg.sender, ROLL_COST);
+        if (!success) revert TransferFailed();
+        
+        emit RollCancelled(msg.sender, ROLL_COST);
+    }
     
-    /// @notice Step 2: Reveal secret after 2+ blocks, within 256 blocks
+    /// @notice Step 2: Reveal secret after 1+ block, within 256 blocks
     /// @param secret The secret that was hashed in commitRoll
     /// @return won Whether the player won
     function revealRoll(bytes32 secret) external returns (bool won) {
         Commitment memory c = commits[msg.sender];
         
         if (c.blockNumber == 0) revert NoCommitment();
-        if (block.number <= c.blockNumber + 1) revert TooEarly();
-        if (block.number > c.blockNumber + 256) revert TooLate();
+        if (block.number <= c.blockNumber) revert TooEarly();
         if (keccak256(abi.encodePacked(secret)) != c.hash) revert InvalidReveal();
+        
+        // Get the commit block's hash - must not be 0 (only available for last 256 blocks)
+        bytes32 commitBlockHash = blockhash(c.blockNumber);
+        if (commitBlockHash == 0) revert TooLate();
         
         delete commits[msg.sender];
         
-        // Fair randomness: player's secret + unknowable future blockhash
+        // Fair randomness: player's secret + unknowable commit block hash
         bytes32 entropy = keccak256(abi.encodePacked(
             secret,
-            blockhash(c.blockNumber + 1)
+            commitBlockHash
         ));
         
         won = (uint256(entropy) % WIN_MODULO) == 0;
@@ -259,72 +251,6 @@ contract HousePool is ERC20, Ownable {
         }
         
         emit RollRevealed(msg.sender, won, won ? ROLL_PAYOUT : 0);
-        
-        // Auto buyback if threshold exceeded
-        _tryBuybackAndBurn();
-    }
-
-    /* ========== BUYBACK & BURN ========== */
-    
-    /// @notice Internal: attempt buyback & burn if conditions met
-    function _tryBuybackAndBurn() internal {
-        // Skip if no router configured
-        if (address(uniswapRouter) == address(0)) return;
-        
-        uint256 pool = effectivePool();
-        if (pool <= BUYBACK_THRESHOLD) return;
-        
-        uint256 excess = pool - MIN_RESERVE;
-        
-        // Approve router
-        usdc.approve(address(uniswapRouter), excess);
-        
-        // Build swap path
-        address[] memory path = new address[](2);
-        path[0] = address(usdc);
-        path[1] = address(this);
-        
-        // Try swap - if it fails (no pool, bad liquidity), just skip
-        try uniswapRouter.swapExactTokensForTokens(
-            excess,
-            0, // Accept any amount (could add slippage protection)
-            path,
-            address(this),
-            block.timestamp
-        ) returns (uint256[] memory amounts) {
-            uint256 houseBought = amounts[1];
-            _burn(address(this), houseBought);
-            emit BuybackAndBurn(excess, houseBought);
-        } catch {
-            // Swap failed - reset approval and continue
-            usdc.approve(address(uniswapRouter), 0);
-        }
-    }
-    
-    /// @notice Manual buyback trigger (anyone can call)
-    function buybackAndBurn() external {
-        _tryBuybackAndBurn();
-    }
-
-    /* ========== OWNER FUNCTIONS ========== */
-    
-    /// @notice One-time mint for bootstrapping Uniswap liquidity
-    /// @param to Address to receive minted tokens
-    /// @param amount Amount of HOUSE to mint
-    function mintForLiquidity(address to, uint256 amount) external onlyOwner {
-        if (liquiditySeeded) revert AlreadySeeded();
-        liquiditySeeded = true;
-        
-        _mint(to, amount);
-        
-        emit LiquiditySeeded(to, amount);
-    }
-    
-    /// @notice Set or update Uniswap router address
-    /// @param _router New router address
-    function setUniswapRouter(address _router) external onlyOwner {
-        uniswapRouter = IUniswapV2Router02(_router);
-        emit UniswapRouterSet(_router);
     }
 
     /* ========== VIEW FUNCTIONS ========== */
@@ -397,9 +323,38 @@ contract HousePool is ERC20, Ownable {
         hash = c.hash;
         blockNumber = c.blockNumber;
         canReveal = c.blockNumber > 0 && 
-                    block.number > c.blockNumber + 1 && 
+                    block.number > c.blockNumber && 
                     block.number <= c.blockNumber + 256;
         isExpired = c.blockNumber > 0 && block.number > c.blockNumber + 256;
     }
+    
+    /// @notice Check if a roll would be a winner (call before reveal to save gas on losses)
+    /// @param player The player's address
+    /// @param secret The secret that was hashed in commitRoll
+    /// @return canCheck Whether the result can be checked (valid commitment, correct secret, blockhash available)
+    /// @return isWinner Whether the roll is a winner
+    function checkRoll(address player, bytes32 secret) external view returns (bool canCheck, bool isWinner) {
+        Commitment memory c = commits[player];
+        
+        // No commitment
+        if (c.blockNumber == 0) return (false, false);
+        
+        // Too early (still in commit block)
+        if (block.number <= c.blockNumber) return (false, false);
+        
+        // Wrong secret
+        if (keccak256(abi.encodePacked(secret)) != c.hash) return (false, false);
+        
+        // Get commit block hash
+        bytes32 commitBlockHash = blockhash(c.blockNumber);
+        
+        // Too late (blockhash no longer available)
+        if (commitBlockHash == 0) return (false, false);
+        
+        // Calculate result
+        bytes32 entropy = keccak256(abi.encodePacked(secret, commitBlockHash));
+        isWinner = (uint256(entropy) % WIN_MODULO) == 0;
+        
+        return (true, isWinner);
+    }
 }
-

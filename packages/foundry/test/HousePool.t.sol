@@ -35,7 +35,7 @@ contract HousePoolTest is Test {
         usdc = new MockUSDC();
         
         // Deploy HousePool
-        housePool = new HousePool(address(usdc), address(0));
+        housePool = new HousePool(address(usdc));
         
         // Distribute USDC to test accounts
         usdc.mint(lp1, INITIAL_USDC);
@@ -113,8 +113,8 @@ contract HousePoolTest is Test {
             housePool.getWithdrawalRequest(lp1);
         
         assertEq(reqShares, shares);
-        assertEq(unlockTime, block.timestamp + 5 minutes);
-        assertEq(expiryTime, unlockTime + 24 hours);
+        assertEq(unlockTime, block.timestamp + 10); // 10 second cooldown
+        assertEq(expiryTime, unlockTime + 60);       // 1 minute window
         assertFalse(canWithdraw); // Can't withdraw yet
         assertFalse(isExpired);
         assertEq(housePool.totalPendingShares(), shares);
@@ -133,8 +133,8 @@ contract HousePoolTest is Test {
         vm.prank(lp1);
         housePool.requestWithdrawal(sharesToWithdraw);
         
-        // Fast forward past cooldown
-        vm.warp(block.timestamp + 5 minutes + 1);
+        // Fast forward past cooldown (10 seconds) but within window (1 minute)
+        vm.warp(block.timestamp + 11);
         
         uint256 usdcBefore = usdc.balanceOf(lp1);
         uint256 poolBefore = housePool.totalPool();
@@ -172,8 +172,8 @@ contract HousePoolTest is Test {
         vm.prank(lp1);
         housePool.requestWithdrawal(sharesToWithdraw);
         
-        // Fast forward past expiry (5 min + 24 hours + 1 second)
-        vm.warp(block.timestamp + 5 minutes + 24 hours + 1);
+        // Fast forward past expiry (10 seconds cooldown + 1 minute window + 1 second)
+        vm.warp(block.timestamp + 10 + 60 + 1);
         
         vm.prank(lp1);
         vm.expectRevert(HousePool.WithdrawalExpired.selector);
@@ -189,8 +189,8 @@ contract HousePoolTest is Test {
         
         assertEq(housePool.totalPendingShares(), shares);
         
-        // Fast forward past expiry
-        vm.warp(block.timestamp + 5 minutes + 24 hours + 1);
+        // Fast forward past expiry (10 seconds cooldown + 1 minute window + 1 second)
+        vm.warp(block.timestamp + 10 + 60 + 1);
         
         // Anyone can cleanup
         vm.prank(player1);
@@ -221,16 +221,19 @@ contract HousePoolTest is Test {
     }
     
     function test_Withdraw_CannotDrainBelowMinReserve() public {
-        // Deposit exactly MIN_RESERVE + a bit more
+        // Deposit enough to test MIN_RESERVE constraint (MIN_RESERVE = 5 USDC)
         vm.prank(lp1);
-        uint256 shares = housePool.deposit(110 * 10**6); // 110 USDC
+        housePool.deposit(10 * 10**6); // 10 USDC total
         
+        // Request withdrawal of 90% of shares (would leave 1 USDC, below MIN_RESERVE)
+        uint256 sharesToWithdraw = (housePool.balanceOf(lp1) * 9) / 10;
         vm.prank(lp1);
-        housePool.requestWithdrawal(shares);
+        housePool.requestWithdrawal(sharesToWithdraw);
         
-        vm.warp(block.timestamp + 5 minutes + 1);
+        // Fast forward past cooldown but within window
+        vm.warp(block.timestamp + 11);
         
-        // This would drain below MIN_RESERVE (100 USDC)
+        // This would leave 1 USDC remaining which is below MIN_RESERVE (5 USDC)
         vm.prank(lp1);
         vm.expectRevert(HousePool.InsufficientPool.selector);
         housePool.withdraw();
@@ -304,13 +307,27 @@ contract HousePoolTest is Test {
         vm.prank(player1);
         vm.expectRevert(HousePool.TooEarly.selector);
         housePool.revealRoll(secret);
+    }
+    
+    function test_RevealRoll_AfterOneBlock_Success() public {
+        vm.prank(lp1);
+        housePool.deposit(200 * 10**6);
         
-        // Advance 1 block - still too early (need 2+)
+        bytes32 secret = bytes32("my_secret");
+        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        
+        vm.prank(player1);
+        housePool.commitRoll(commitment);
+        
+        // Advance 1 block - should now work
         vm.roll(block.number + 1);
         
         vm.prank(player1);
-        vm.expectRevert(HousePool.TooEarly.selector);
-        housePool.revealRoll(secret);
+        housePool.revealRoll(secret); // Should succeed
+        
+        // Commitment should be cleared
+        (bytes32 hash,,,) = housePool.getCommitment(player1);
+        assertEq(hash, bytes32(0));
     }
     
     function test_RevealRoll_Success() public {
@@ -361,6 +378,55 @@ contract HousePoolTest is Test {
         housePool.revealRoll(secret);
     }
     
+    function test_CheckRoll() public {
+        vm.prank(lp1);
+        housePool.deposit(200 * 10**6);
+        
+        bytes32 secret = bytes32("my_secret");
+        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        
+        vm.prank(player1);
+        housePool.commitRoll(commitment);
+        
+        // Can't check in same block
+        (bool canCheck, bool isWinner) = housePool.checkRoll(player1, secret);
+        assertFalse(canCheck);
+        
+        // Advance 1 block
+        vm.roll(block.number + 1);
+        
+        // Now can check
+        (canCheck, isWinner) = housePool.checkRoll(player1, secret);
+        assertTrue(canCheck);
+        
+        // Wrong secret returns false for canCheck
+        (canCheck, ) = housePool.checkRoll(player1, bytes32("wrong"));
+        assertFalse(canCheck);
+        
+        // Verify checkRoll matches actual reveal result
+        vm.prank(player1);
+        bool actualWon = housePool.revealRoll(secret);
+        assertEq(isWinner, actualWon);
+    }
+    
+    function test_CheckRoll_TooLate() public {
+        vm.prank(lp1);
+        housePool.deposit(200 * 10**6);
+        
+        bytes32 secret = bytes32("my_secret");
+        bytes32 commitment = keccak256(abi.encodePacked(secret));
+        
+        vm.prank(player1);
+        housePool.commitRoll(commitment);
+        
+        // Advance 257 blocks
+        vm.roll(block.number + 257);
+        
+        // Can't check anymore (blockhash is 0)
+        (bool canCheck, ) = housePool.checkRoll(player1, secret);
+        assertFalse(canCheck);
+    }
+    
     function test_RevealRoll_InvalidSecret_Reverts() public {
         vm.prank(lp1);
         housePool.deposit(200 * 10**6);
@@ -397,42 +463,6 @@ contract HousePoolTest is Test {
         vm.prank(player1);
         vm.expectRevert(HousePool.InsufficientPool.selector);
         housePool.commitRoll(commitment);
-    }
-
-    /* ========== OWNER FUNCTIONS TESTS ========== */
-    
-    function test_MintForLiquidity() public {
-        uint256 mintAmount = 1000 * 10**18;
-        
-        vm.prank(owner);
-        housePool.mintForLiquidity(owner, mintAmount);
-        
-        assertEq(housePool.balanceOf(owner), mintAmount);
-        assertTrue(housePool.liquiditySeeded());
-    }
-    
-    function test_MintForLiquidity_OnlyOnce() public {
-        vm.prank(owner);
-        housePool.mintForLiquidity(owner, 1000 * 10**18);
-        
-        vm.prank(owner);
-        vm.expectRevert(HousePool.AlreadySeeded.selector);
-        housePool.mintForLiquidity(owner, 1000 * 10**18);
-    }
-    
-    function test_MintForLiquidity_OnlyOwner() public {
-        vm.prank(player1);
-        vm.expectRevert();
-        housePool.mintForLiquidity(player1, 1000 * 10**18);
-    }
-    
-    function test_SetUniswapRouter() public {
-        address newRouter = address(0x123);
-        
-        vm.prank(owner);
-        housePool.setUniswapRouter(newRouter);
-        
-        assertEq(address(housePool.uniswapRouter()), newRouter);
     }
 
     /* ========== VIEW FUNCTIONS TESTS ========== */
@@ -560,19 +590,22 @@ contract HousePoolTest is Test {
         vm.prank(lp1);
         housePool.requestWithdrawal(shares);
         
-        // Bound wait time
-        waitTime = bound(waitTime, 0, 30 days);
+        // Bound wait time (10 sec cooldown + 1 min window = 70 sec total)
+        waitTime = bound(waitTime, 0, 5 minutes);
         vm.warp(block.timestamp + waitTime);
         
         (,,,bool canWithdraw, bool isExpired) = housePool.getWithdrawalRequest(lp1);
         
-        if (waitTime < 5 minutes) {
+        if (waitTime < 10) {
+            // Before cooldown
             assertFalse(canWithdraw);
             assertFalse(isExpired);
-        } else if (waitTime <= 5 minutes + 24 hours) {
+        } else if (waitTime <= 10 + 60) {
+            // In withdrawal window
             assertTrue(canWithdraw);
             assertFalse(isExpired);
         } else {
+            // After window expired
             assertFalse(canWithdraw);
             assertTrue(isExpired);
         }

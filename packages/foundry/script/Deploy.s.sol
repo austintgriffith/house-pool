@@ -15,13 +15,10 @@ import "../contracts/HousePool.sol";
 contract DeployScript is ScaffoldETHDeploy {
     // Base Mainnet USDC
     address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
-    
-    // Set to address(0) to disable auto-buyback, or use a DEX router address
-    address constant UNISWAP_ROUTER = address(0);
 
     function run() external ScaffoldEthDeployerRunner {
         // Deploy HousePool with real USDC
-        HousePool housePool = new HousePool(USDC, UNISWAP_ROUTER);
+        HousePool housePool = new HousePool(USDC);
         
         console.log("=== DEPLOYMENT COMPLETE ===");
         console.log("HousePool:", address(housePool));

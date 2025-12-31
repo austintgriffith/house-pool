@@ -36,7 +36,7 @@ House Pool is a single-contract gambling protocol where:
 
 1. **Deposit USDC** → Receive HOUSE tokens at current share price
 2. **Hold** → As gamblers lose, pool grows, your shares worth more
-3. **Withdraw** → Request withdrawal (5 min cooldown) → Execute within 24hr window
+3. **Withdraw** → Request withdrawal (10 sec cooldown) → Execute within 1 min window
 
 ### For Gamblers
 
@@ -56,7 +56,7 @@ Two-step commit-reveal process (prevents manipulation):
 To prevent front-running (LP sees winning reveal → tries to withdraw):
 
 ```
-Request Withdrawal → 5 min cooldown → 24hr window to execute → expires
+Request Withdrawal → 10 sec cooldown → 1 min window to execute → expires
 ```
 
 If you don't execute within the window, request expires and you keep your HOUSE tokens.
@@ -74,7 +74,7 @@ Gambling is blocked if effective pool is too low.
 
 ### Auto Buyback & Burn (Optional)
 
-When the pool exceeds a threshold (150 USDC), the contract can automatically:
+When the pool exceeds a threshold (15 USDC), the contract can automatically:
 
 1. Buy HOUSE tokens from Uniswap
 2. Burn them
@@ -88,8 +88,8 @@ Single contract that handles everything:
 ### LP Functions
 
 - `deposit(usdcAmount)` - Deposit USDC, receive HOUSE shares
-- `requestWithdrawal(shares)` - Start 5 min cooldown
-- `withdraw()` - Execute within 24hr window
+- `requestWithdrawal(shares)` - Start 10 sec cooldown
+- `withdraw()` - Execute within 1 min window
 - `cancelWithdrawal()` - Cancel pending request
 - `cleanupExpiredWithdrawal(address)` - Anyone can clear expired requests
 
@@ -113,15 +113,15 @@ Single contract that handles everything:
 
 ## Constants
 
-| Constant          | Value     | Description                |
-| ----------------- | --------- | -------------------------- |
-| ROLL_COST         | 1 USDC    | Cost to roll               |
-| ROLL_PAYOUT       | 10 USDC   | Win payout                 |
-| WIN_MODULO        | 11        | 1/11 win chance            |
-| MIN_RESERVE       | 100 USDC  | Minimum pool for payouts   |
-| BUYBACK_THRESHOLD | 150 USDC  | Trigger buyback above this |
-| WITHDRAWAL_DELAY  | 5 minutes | Cooldown before withdrawal |
-| WITHDRAWAL_WINDOW | 24 hours  | Time to execute withdrawal |
+| Constant          | Value      | Description                |
+| ----------------- | ---------- | -------------------------- |
+| ROLL_COST         | 1 USDC     | Cost to roll               |
+| ROLL_PAYOUT       | 10 USDC    | Win payout                 |
+| WIN_MODULO        | 11         | 1/11 win chance            |
+| MIN_RESERVE       | 5 USDC     | Minimum pool for payouts   |
+| BUYBACK_THRESHOLD | 15 USDC    | Trigger buyback above this |
+| WITHDRAWAL_DELAY  | 10 seconds | Cooldown before withdrawal |
+| WITHDRAWAL_WINDOW | 1 minute   | Time to execute withdrawal |
 
 ## Quickstart
 
@@ -193,7 +193,7 @@ packages/
 
 3. **Commit-reveal gambling**: Prevents both miner manipulation and LP front-running.
 
-4. **Withdrawal cooldown + expiry**: 5 min wait, 24hr window. Prevents griefing (signaling but never withdrawing).
+4. **Withdrawal cooldown + expiry**: 10 sec wait, 1 min window. Prevents griefing (signaling but never withdrawing).
 
 5. **Effective pool accounting**: Pending withdrawals reduce available liquidity immediately.
 

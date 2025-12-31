@@ -17,26 +17,8 @@ const deployedContracts = {
               type: "address",
               internalType: "address",
             },
-            {
-              name: "_uniswapRouter",
-              type: "address",
-              internalType: "address",
-            },
           ],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "BUYBACK_THRESHOLD",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -198,13 +180,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "buybackAndBurn",
-          inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "canRoll",
           inputs: [],
           outputs: [
@@ -218,10 +193,46 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "cancelCommit",
+          inputs: [],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "cancelWithdrawal",
           inputs: [],
           outputs: [],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "checkRoll",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "secret",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "canCheck",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "isWinner",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -393,37 +404,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "liquiditySeeded",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "mintForLiquidity",
-          inputs: [
-            {
-              name: "to",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "name",
           inputs: [],
           outputs: [
@@ -485,19 +465,6 @@ const deployedContracts = {
               internalType: "bool",
             },
           ],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "setUniswapRouter",
-          inputs: [
-            {
-              name: "_router",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
           stateMutability: "nonpayable",
         },
         {
@@ -633,19 +600,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "uniswapRouter",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "contract IUniswapV2Router02",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "usdc",
           inputs: [],
           outputs: [
@@ -745,25 +699,6 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "BuybackAndBurn",
-          inputs: [
-            {
-              name: "usdcSpent",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-            {
-              name: "houseBurned",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "Deposit",
           inputs: [
             {
@@ -789,25 +724,6 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "LiquiditySeeded",
-          inputs: [
-            {
-              name: "to",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "amount",
-              type: "uint256",
-              indexed: false,
-              internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
           name: "OwnershipTransferred",
           inputs: [
             {
@@ -821,6 +737,25 @@ const deployedContracts = {
               type: "address",
               indexed: true,
               internalType: "address",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RollCancelled",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "refund",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
             },
           ],
           anonymous: false,
@@ -890,19 +825,6 @@ const deployedContracts = {
               type: "uint256",
               indexed: false,
               internalType: "uint256",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "UniswapRouterSet",
-          inputs: [
-            {
-              name: "router",
-              type: "address",
-              indexed: true,
-              internalType: "address",
             },
           ],
           anonymous: false,
@@ -1000,11 +922,6 @@ const deployedContracts = {
             },
           ],
           anonymous: false,
-        },
-        {
-          type: "error",
-          name: "AlreadySeeded",
-          inputs: [],
         },
         {
           type: "error",
@@ -1171,7 +1088,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 40178267,
+      deployedOnBlock: 40181608,
     },
   },
 } as const;

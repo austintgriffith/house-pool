@@ -1,23 +1,19 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import type { NextPage } from "next";
-import { formatUnits, keccak256, parseUnits, toHex } from "viem";
+import { formatUnits, parseUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
-import {
-  ArrowPathIcon,
-  BanknotesIcon,
-  ClockIcon,
-  CubeIcon,
-  MinusCircleIcon,
-  PlusCircleIcon,
-  SparklesIcon,
-} from "@heroicons/react/24/outline";
+import { BanknotesIcon, ClockIcon, MinusCircleIcon, PlusCircleIcon, SparklesIcon } from "@heroicons/react/24/outline";
 import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 // USDC has 6 decimals, HOUSE has 18 decimals
 const USDC_DECIMALS = 6;
 const HOUSE_DECIMALS = 18;
+
+// Base USDC address
+const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
 
 // USDC ABI for approve and balance
 const USDC_ABI = [
@@ -46,8 +42,6 @@ const HousePage: NextPage = () => {
   // State for user inputs
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawShares, setWithdrawShares] = useState("");
-  const [gamblingSecret, setGamblingSecret] = useState("");
-  const [pendingSecret, setPendingSecret] = useState<string | null>(null);
 
   // Get contract info
   const { data: housePoolContract } = useDeployedContractInfo({ contractName: "HousePool" });
@@ -73,15 +67,14 @@ const HousePage: NextPage = () => {
     functionName: "canRoll",
   });
 
+  const { data: totalSupply, refetch: refetchTotalSupply } = useScaffoldReadContract({
+    contractName: "HousePool",
+    functionName: "totalSupply",
+  });
+
   const { refetch: refetchTotalPendingShares } = useScaffoldReadContract({
     contractName: "HousePool",
     functionName: "totalPendingShares",
-  });
-
-  // Read USDC address from contract
-  const { data: usdcAddress } = useScaffoldReadContract({
-    contractName: "HousePool",
-    functionName: "usdc",
   });
 
   // Read user balances
@@ -98,7 +91,7 @@ const HousePage: NextPage = () => {
   });
 
   const { data: userUsdcBalance, refetch: refetchUserUsdcBalance } = useReadContract({
-    address: usdcAddress,
+    address: USDC_ADDRESS,
     abi: USDC_ABI,
     functionName: "balanceOf",
     args: connectedAddress ? [connectedAddress] : undefined,
@@ -108,13 +101,6 @@ const HousePage: NextPage = () => {
   const { data: withdrawalRequest, refetch: refetchWithdrawalRequest } = useScaffoldReadContract({
     contractName: "HousePool",
     functionName: "getWithdrawalRequest",
-    args: [connectedAddress],
-  });
-
-  // Read commitment
-  const { data: commitment, refetch: refetchCommitment } = useScaffoldReadContract({
-    contractName: "HousePool",
-    functionName: "getCommitment",
     args: [connectedAddress],
   });
 
@@ -131,23 +117,23 @@ const HousePage: NextPage = () => {
     refetchEffectivePool();
     refetchSharePrice();
     refetchCanRoll();
+    refetchTotalSupply();
     refetchTotalPendingShares();
     refetchUserHouseBalance();
     refetchUserUsdcValue();
     refetchUserUsdcBalance();
     refetchWithdrawalRequest();
-    refetchCommitment();
   }, [
     refetchTotalPool,
     refetchEffectivePool,
     refetchSharePrice,
     refetchCanRoll,
+    refetchTotalSupply,
     refetchTotalPendingShares,
     refetchUserHouseBalance,
     refetchUserUsdcValue,
     refetchUserUsdcBalance,
     refetchWithdrawalRequest,
-    refetchCommitment,
   ]);
 
   // Auto-refresh
@@ -156,24 +142,16 @@ const HousePage: NextPage = () => {
     return () => clearInterval(interval);
   }, [refetchAll]);
 
-  // Generate random secret for gambling
-  const generateSecret = () => {
-    const randomBytes = crypto.getRandomValues(new Uint8Array(32));
-    const secret = toHex(randomBytes);
-    setGamblingSecret(secret);
-    return secret;
-  };
-
   // Handle deposit
   const handleDeposit = async () => {
-    if (!depositAmount || !housePoolContract || !usdcAddress) return;
+    if (!depositAmount || !housePoolContract) return;
 
     try {
       const amountUsdc = parseUnits(depositAmount, USDC_DECIMALS);
 
       // Approve USDC
       await writeUsdc({
-        address: usdcAddress,
+        address: USDC_ADDRESS,
         abi: USDC_ABI,
         functionName: "approve",
         args: [housePoolContract.address, amountUsdc],
@@ -216,7 +194,6 @@ const HousePage: NextPage = () => {
     try {
       await writeHousePool({
         functionName: "withdraw",
-        args: [],
       });
 
       refetchAll();
@@ -230,7 +207,6 @@ const HousePage: NextPage = () => {
     try {
       await writeHousePool({
         functionName: "cancelWithdrawal",
-        args: [],
       });
 
       refetchAll();
@@ -238,73 +214,6 @@ const HousePage: NextPage = () => {
       console.error("Cancel withdrawal failed:", error);
     }
   };
-
-  // Handle commit roll
-  const handleCommitRoll = async () => {
-    if (!housePoolContract || !usdcAddress) return;
-
-    try {
-      // Generate or use existing secret
-      const secret = gamblingSecret || generateSecret();
-      const commitHash = keccak256(toHex(secret));
-
-      // Store secret for reveal
-      setPendingSecret(secret);
-      localStorage.setItem("pendingGamblingSecret", secret);
-
-      // Approve 1 USDC for roll
-      const rollCost = parseUnits("1", USDC_DECIMALS);
-      await writeUsdc({
-        address: usdcAddress,
-        abi: USDC_ABI,
-        functionName: "approve",
-        args: [housePoolContract.address, rollCost],
-      });
-
-      // Commit
-      await writeHousePool({
-        functionName: "commitRoll",
-        args: [commitHash],
-      });
-
-      setGamblingSecret("");
-      refetchAll();
-    } catch (error) {
-      console.error("Commit roll failed:", error);
-    }
-  };
-
-  // Handle reveal roll
-  const handleRevealRoll = async () => {
-    // Try to get secret from state or localStorage
-    const secret = pendingSecret || localStorage.getItem("pendingGamblingSecret");
-    if (!secret) {
-      alert("No pending secret found. Please commit first.");
-      return;
-    }
-
-    try {
-      await writeHousePool({
-        functionName: "revealRoll",
-        args: [toHex(secret)],
-      });
-
-      // Clear stored secret
-      setPendingSecret(null);
-      localStorage.removeItem("pendingGamblingSecret");
-      refetchAll();
-    } catch (error) {
-      console.error("Reveal roll failed:", error);
-    }
-  };
-
-  // Check for pending secret on load
-  useEffect(() => {
-    const stored = localStorage.getItem("pendingGamblingSecret");
-    if (stored) {
-      setPendingSecret(stored);
-    }
-  }, []);
 
   const isLoading = isHousePoolWritePending || isUsdcWritePending;
 
@@ -317,12 +226,20 @@ const HousePage: NextPage = () => {
       ? parseFloat(formatUnits(value, HOUSE_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 4 })
       : "0";
 
-  const formatSharePrice = (value: bigint | undefined) => {
-    if (!value) return "1.000000";
-    // sharePrice is in 18 decimals but represents USDC (6 decimals)
-    // So we divide by 1e18 then multiply by 1e6 to get USDC value
-    const priceInUsdc = Number(value) / 1e18;
+  const formatSharePrice = (value: bigint | undefined, pool: bigint | undefined) => {
+    if (!value || !pool || pool === 0n) return "1.000000";
+    const priceInUsdc = Number(value) / 1e6;
     return priceInUsdc.toFixed(6);
+  };
+
+  // Calculate HOUSE tokens for a given USDC amount
+  const calculateHouseOut = (usdcAmount: string) => {
+    if (!usdcAmount || parseFloat(usdcAmount) === 0) return "0";
+    if (!totalPool || totalPool === 0n) {
+      return parseFloat(usdcAmount).toFixed(4);
+    }
+    if (!sharePrice) return "0";
+    return ((parseFloat(usdcAmount) * 1e6) / Number(sharePrice)).toFixed(4);
   };
 
   // Parse withdrawal request
@@ -332,37 +249,37 @@ const HousePage: NextPage = () => {
   const withdrawalUnlockTime = withdrawalRequest ? new Date(Number(withdrawalRequest[1]) * 1000) : null;
   const withdrawalExpiryTime = withdrawalRequest ? new Date(Number(withdrawalRequest[2]) * 1000) : null;
 
-  // Parse commitment
-  const hasCommitment =
-    commitment && commitment[0] !== "0x0000000000000000000000000000000000000000000000000000000000000000";
-  const commitmentCanReveal = commitment && commitment[2];
-  const commitmentIsExpired = commitment && commitment[3];
-
   return (
-    <div className="flex flex-col items-center pt-8 px-4 pb-12 min-h-screen bg-gradient-to-b from-base-300 to-base-100">
-      <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-secondary bg-clip-text text-transparent">
-        🏠 House Pool
+    <div className="flex flex-col items-center pt-8 px-4 pb-12 min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-base-100 to-base-100">
+      <h1 className="text-5xl font-black mb-2 tracking-tight">
+        <span className="bg-gradient-to-r from-violet-400 via-purple-500 to-fuchsia-500 bg-clip-text text-transparent">
+          🏠 House Pool
+        </span>
       </h1>
-      <p className="text-base-content/60 mb-6 text-center max-w-md">
-        Deposit USDC to become the house. Your share value grows as the house profits from gambling.
+      <p className="text-base-content/60 mb-8 text-center max-w-md">
+        Buy HOUSE tokens to own the casino. Your tokens grow in value as the house profits from gambling.
       </p>
 
       {/* Pool Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 w-full max-w-4xl mb-8">
-        <div className="bg-base-100 rounded-2xl p-4 shadow-lg border border-base-300">
-          <p className="text-xs text-base-content/60 uppercase tracking-wide">Total Pool</p>
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 w-full max-w-4xl mb-8">
+        <div className="bg-base-100/80 backdrop-blur rounded-2xl p-4 shadow-lg border border-base-300">
+          <p className="text-xs text-base-content/50 uppercase tracking-wide">Total Pool</p>
           <p className="text-2xl font-bold text-primary">${formatUsdc(totalPool)}</p>
         </div>
-        <div className="bg-base-100 rounded-2xl p-4 shadow-lg border border-base-300">
-          <p className="text-xs text-base-content/60 uppercase tracking-wide">Effective Pool</p>
+        <div className="bg-base-100/80 backdrop-blur rounded-2xl p-4 shadow-lg border border-base-300">
+          <p className="text-xs text-base-content/50 uppercase tracking-wide">Effective Pool</p>
           <p className="text-2xl font-bold text-secondary">${formatUsdc(effectivePool)}</p>
         </div>
-        <div className="bg-base-100 rounded-2xl p-4 shadow-lg border border-base-300">
-          <p className="text-xs text-base-content/60 uppercase tracking-wide">Share Price</p>
-          <p className="text-2xl font-bold">${formatSharePrice(sharePrice)}</p>
+        <div className="bg-base-100/80 backdrop-blur rounded-2xl p-4 shadow-lg border border-primary/30 ring-2 ring-primary/20">
+          <p className="text-xs text-base-content/50 uppercase tracking-wide">HOUSE Price</p>
+          <p className="text-2xl font-bold text-primary">${formatSharePrice(sharePrice, totalPool)}</p>
         </div>
-        <div className="bg-base-100 rounded-2xl p-4 shadow-lg border border-base-300">
-          <p className="text-xs text-base-content/60 uppercase tracking-wide">Can Roll?</p>
+        <div className="bg-base-100/80 backdrop-blur rounded-2xl p-4 shadow-lg border border-base-300">
+          <p className="text-xs text-base-content/50 uppercase tracking-wide">Total Supply</p>
+          <p className="text-2xl font-bold">{formatHouse(totalSupply)}</p>
+        </div>
+        <div className="bg-base-100/80 backdrop-blur rounded-2xl p-4 shadow-lg border border-base-300">
+          <p className="text-xs text-base-content/50 uppercase tracking-wide">Can Roll?</p>
           <p className={`text-2xl font-bold ${canRoll ? "text-success" : "text-error"}`}>
             {canRoll ? "Yes ✓" : "No ✗"}
           </p>
@@ -371,231 +288,152 @@ const HousePage: NextPage = () => {
 
       {/* User Position */}
       {connectedAddress && (
-        <div className="bg-gradient-to-br from-primary/10 to-secondary/10 rounded-3xl p-6 w-full max-w-4xl mb-8 border border-primary/20">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+        <div className="bg-gradient-to-br from-violet-500/10 to-fuchsia-500/10 rounded-3xl p-6 w-full max-w-4xl mb-8 border border-violet-500/20">
+          <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
             <BanknotesIcon className="h-5 w-5" />
             Your Position
           </h2>
           <div className="grid grid-cols-3 gap-4">
-            <div>
+            <div className="bg-base-100/50 rounded-xl p-4">
               <p className="text-sm text-base-content/60">HOUSE Tokens</p>
-              <p className="text-xl font-bold">{formatHouse(userHouseBalance)}</p>
+              <p className="text-2xl font-bold">{formatHouse(userHouseBalance)}</p>
             </div>
-            <div>
+            <div className="bg-base-100/50 rounded-xl p-4">
               <p className="text-sm text-base-content/60">USDC Value</p>
-              <p className="text-xl font-bold text-primary">${formatUsdc(userUsdcValue)}</p>
+              <p className="text-2xl font-bold text-primary">${formatUsdc(userUsdcValue)}</p>
             </div>
-            <div>
+            <div className="bg-base-100/50 rounded-xl p-4">
               <p className="text-sm text-base-content/60">Wallet USDC</p>
-              <p className="text-xl font-bold">${formatUsdc(userUsdcBalance as bigint | undefined)}</p>
+              <p className="text-2xl font-bold">${formatUsdc(userUsdcBalance as bigint | undefined)}</p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Main Panels */}
-      <div className="grid md:grid-cols-2 gap-6 w-full max-w-4xl">
-        {/* LP Panel */}
-        <div className="bg-base-100 rounded-3xl p-6 shadow-xl border border-base-300">
-          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <PlusCircleIcon className="h-6 w-6 text-primary" />
-            Liquidity
-          </h3>
+      {/* Buy/Sell Panel */}
+      <div className="bg-base-100 rounded-3xl p-6 shadow-xl border border-base-300 w-full max-w-lg mb-8">
+        <h3 className="text-xl font-bold mb-5 flex items-center gap-2">
+          <PlusCircleIcon className="h-6 w-6 text-primary" />
+          Buy & Sell HOUSE
+        </h3>
 
-          {/* Deposit Section */}
-          <div className="space-y-3 mb-6">
-            <h4 className="text-sm font-semibold text-base-content/80">Deposit USDC</h4>
-            <input
-              type="number"
-              className="input input-bordered w-full"
-              placeholder="Amount in USDC"
-              value={depositAmount}
-              onChange={e => setDepositAmount(e.target.value)}
-            />
-            <button
-              className="btn btn-primary w-full"
-              onClick={handleDeposit}
-              disabled={isLoading || !depositAmount || !connectedAddress}
-            >
-              {isLoading ? <span className="loading loading-spinner loading-sm"></span> : "Deposit USDC → Get HOUSE"}
-            </button>
-          </div>
+        {/* Buy Section */}
+        <div className="space-y-3 mb-6">
+          <h4 className="text-sm font-semibold text-base-content/80">Buy HOUSE</h4>
+          <input
+            type="number"
+            className="input input-bordered w-full"
+            placeholder="USDC to spend"
+            value={depositAmount}
+            onChange={e => setDepositAmount(e.target.value)}
+          />
+          {depositAmount && <p className="text-sm text-base-content/60">≈ {calculateHouseOut(depositAmount)} HOUSE</p>}
+          <button
+            className="btn btn-primary w-full"
+            onClick={handleDeposit}
+            disabled={isLoading || !depositAmount || !connectedAddress}
+          >
+            {isLoading ? <span className="loading loading-spinner loading-sm"></span> : "Buy HOUSE"}
+          </button>
+        </div>
 
-          {/* Withdrawal Section */}
-          <div className="space-y-3 border-t border-base-300 pt-4">
-            <h4 className="text-sm font-semibold text-base-content/80 flex items-center gap-2">
-              <MinusCircleIcon className="h-4 w-4" />
-              Withdraw
-            </h4>
+        {/* Sell Section */}
+        <div className="space-y-3 border-t border-base-300 pt-5">
+          <h4 className="text-sm font-semibold text-base-content/80 flex items-center gap-2">
+            <MinusCircleIcon className="h-4 w-4" />
+            Sell HOUSE
+          </h4>
 
-            {hasWithdrawalRequest ? (
-              <div className="bg-base-200 rounded-xl p-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Pending Withdrawal</span>
-                  <span className="font-bold">{formatHouse(withdrawalRequest[0])} HOUSE</span>
-                </div>
-
-                {withdrawalIsExpired ? (
-                  <div className="text-error text-sm">Request expired. Please request again.</div>
-                ) : withdrawalCanExecute ? (
-                  <>
-                    <div className="text-success text-sm">Ready to withdraw!</div>
-                    <div className="text-xs text-base-content/60">
-                      Expires: {withdrawalExpiryTime?.toLocaleString()}
-                    </div>
-                  </>
-                ) : (
-                  <div className="text-warning text-sm flex items-center gap-1">
-                    <ClockIcon className="h-4 w-4" />
-                    Unlocks: {withdrawalUnlockTime?.toLocaleString()}
-                  </div>
-                )}
-
-                <div className="flex gap-2">
-                  <button
-                    className="btn btn-secondary flex-1"
-                    onClick={handleWithdraw}
-                    disabled={isLoading || !withdrawalCanExecute}
-                  >
-                    Execute Withdrawal
-                  </button>
-                  <button className="btn btn-outline" onClick={handleCancelWithdrawal} disabled={isLoading}>
-                    Cancel
-                  </button>
-                </div>
+          {hasWithdrawalRequest ? (
+            <div className="bg-base-200 rounded-xl p-4 space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm">Pending Sale</span>
+                <span className="font-bold">{formatHouse(withdrawalRequest[0])} HOUSE</span>
               </div>
-            ) : (
-              <>
+
+              {withdrawalIsExpired ? (
+                <div className="text-error text-sm">Sale expired. Please try again.</div>
+              ) : withdrawalCanExecute ? (
+                <>
+                  <div className="text-success text-sm font-semibold">Ready to confirm sale!</div>
+                  <div className="text-xs text-base-content/60">Expires: {withdrawalExpiryTime?.toLocaleString()}</div>
+                </>
+              ) : (
+                <div className="text-warning text-sm flex items-center gap-1">
+                  <ClockIcon className="h-4 w-4" />
+                  Confirm available: {withdrawalUnlockTime?.toLocaleString()}
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                <button
+                  className="btn btn-secondary flex-1"
+                  onClick={handleWithdraw}
+                  disabled={isLoading || !withdrawalCanExecute}
+                >
+                  Confirm Sale
+                </button>
+                <button className="btn btn-outline" onClick={handleCancelWithdrawal} disabled={isLoading}>
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div className="flex gap-2">
                 <input
                   type="number"
-                  className="input input-bordered w-full"
-                  placeholder="HOUSE tokens to withdraw"
+                  className="input input-bordered flex-1"
+                  placeholder="HOUSE tokens to sell"
                   value={withdrawShares}
                   onChange={e => setWithdrawShares(e.target.value)}
                 />
-                <p className="text-xs text-base-content/60">5 min cooldown, then 24hr window to execute</p>
                 <button
-                  className="btn btn-secondary w-full"
-                  onClick={handleRequestWithdrawal}
-                  disabled={isLoading || !withdrawShares || !connectedAddress}
+                  className="btn btn-ghost btn-sm self-center"
+                  onClick={() => userHouseBalance && setWithdrawShares(formatUnits(userHouseBalance, HOUSE_DECIMALS))}
+                  disabled={!userHouseBalance}
                 >
-                  Request Withdrawal
+                  MAX
                 </button>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Gambling Panel */}
-        <div className="bg-base-100 rounded-3xl p-6 shadow-xl border border-base-300">
-          <h3 className="text-xl font-bold mb-4 flex items-center gap-2">
-            <SparklesIcon className="h-6 w-6 text-secondary" />
-            Roll the Dice
-          </h3>
-
-          <div className="bg-gradient-to-r from-primary/10 to-secondary/10 rounded-xl p-4 mb-4">
-            <div className="grid grid-cols-3 text-center">
-              <div>
-                <p className="text-xs text-base-content/60">Cost</p>
-                <p className="font-bold">1 USDC</p>
               </div>
-              <div>
-                <p className="text-xs text-base-content/60">Win Chance</p>
-                <p className="font-bold">~9%</p>
-              </div>
-              <div>
-                <p className="text-xs text-base-content/60">Payout</p>
-                <p className="font-bold text-success">10 USDC</p>
-              </div>
-            </div>
-          </div>
-
-          {!canRoll ? (
-            <div className="bg-error/10 border border-error/30 rounded-xl p-4 text-center">
-              <p className="text-error font-semibold">Rolling Disabled</p>
-              <p className="text-sm text-base-content/60">Pool needs more liquidity</p>
-            </div>
-          ) : hasCommitment ? (
-            <div className="space-y-4">
-              <div className="bg-base-200 rounded-xl p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <CubeIcon className="h-5 w-5 text-primary" />
-                  <span className="font-semibold">Commitment Active</span>
-                </div>
-                <p className="text-sm text-base-content/60">Block: {commitment[1].toString()}</p>
-
-                {commitmentIsExpired ? (
-                  <p className="text-error text-sm mt-2">Commitment expired (256 blocks passed)</p>
-                ) : commitmentCanReveal ? (
-                  <p className="text-success text-sm mt-2">Ready to reveal!</p>
-                ) : (
-                  <p className="text-warning text-sm mt-2">Wait 2+ blocks to reveal...</p>
-                )}
-              </div>
-
+              {withdrawShares && (
+                <p className="text-sm text-base-content/60">
+                  ≈ $
+                  {!totalPool || totalPool === 0n
+                    ? parseFloat(withdrawShares).toFixed(2)
+                    : ((parseFloat(withdrawShares) * Number(sharePrice)) / 1e6).toFixed(2)}{" "}
+                  USDC
+                </p>
+              )}
+              <p className="text-xs text-base-content/50">10 sec cooldown, then 1 min to confirm</p>
               <button
-                className="btn btn-primary w-full"
-                onClick={handleRevealRoll}
-                disabled={isLoading || !commitmentCanReveal || commitmentIsExpired}
+                className="btn btn-secondary w-full"
+                onClick={handleRequestWithdrawal}
+                disabled={isLoading || !withdrawShares || !connectedAddress}
               >
-                {isLoading ? (
-                  <span className="loading loading-spinner loading-sm"></span>
-                ) : (
-                  <>
-                    <ArrowPathIcon className="h-5 w-5" />
-                    Reveal & Roll!
-                  </>
-                )}
+                Sell HOUSE
               </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-base-content/60">
-                Two-step process: First commit a secret hash, wait 2 blocks, then reveal to get your result.
-              </p>
-
-              <div className="form-control">
-                <label className="label">
-                  <span className="label-text">Secret (auto-generated)</span>
-                  <button className="btn btn-xs btn-ghost" onClick={generateSecret}>
-                    Generate New
-                  </button>
-                </label>
-                <input
-                  type="text"
-                  className="input input-bordered input-sm font-mono text-xs"
-                  placeholder="Click 'Generate New' or enter your own"
-                  value={gamblingSecret}
-                  onChange={e => setGamblingSecret(e.target.value)}
-                />
-              </div>
-
-              <button
-                className="btn btn-primary w-full"
-                onClick={handleCommitRoll}
-                disabled={isLoading || !connectedAddress}
-              >
-                {isLoading ? (
-                  <span className="loading loading-spinner loading-sm"></span>
-                ) : (
-                  <>
-                    <CubeIcon className="h-5 w-5" />
-                    Commit (Pay 1 USDC)
-                  </>
-                )}
-              </button>
-            </div>
+            </>
           )}
         </div>
       </div>
 
+      {/* Link to Roll */}
+      <div className="text-center pb-8">
+        <p className="text-base-content/50 mb-3">Want to gamble against the house?</p>
+        <Link href="/" className="btn btn-outline gap-2">
+          <SparklesIcon className="h-5 w-5" />
+          Roll the Dice
+        </Link>
+      </div>
+
       {/* Info Footer */}
-      <div className="mt-8 text-center text-sm text-base-content/50 max-w-2xl">
+      <div className="text-center text-sm text-base-content/40 max-w-xl px-4">
         <p>
-          <strong>How it works:</strong> Deposit USDC to mint HOUSE tokens. As gamblers play and lose, the pool grows,
-          making your HOUSE tokens worth more USDC. The house has a ~9% edge.
+          <strong>How it works:</strong> Buy HOUSE tokens to own a share of the casino. As gamblers play and lose, the
+          pool grows and HOUSE price increases. The house has a ~9% edge.
         </p>
-        <p className="mt-2">Withdrawals have a 5-minute cooldown to prevent front-running.</p>
+        <p className="mt-2">Selling requires a 10-second cooldown to prevent front-running.</p>
       </div>
     </div>
   );
