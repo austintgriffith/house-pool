@@ -1,34 +1,44 @@
-# 🏠 House Pool
+# 🎲 DAMM - Decentralized Automated Market Maker for Gambling
 
-> A simplified gambling pool where **LP tokens = house ownership**. Deposit USDC to become the house.
+> A two-contract gambling protocol where **LP tokens = house ownership**. Deposit USDC to become the house.
 
-## Core Concept
+## Architecture
 
-House Pool is a single-contract gambling protocol where:
-
-- **One token (HOUSE)** represents your share of the USDC pool
-- **Share price grows** as the house profits from gambling
-- **No AMM complexity** - just deposit USDC, get HOUSE, withdraw at pool ratio
+DAMM separates concerns into two immutable contracts:
 
 ```
-┌─────────────────────────────────────────────────────────────┐
-│                      HousePool Contract                     │
-├─────────────────────────────────────────────────────────────┤
-│                                                             │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │              USDC Pool                              │   │
-│  │  Deposits + Gambling Profits - Gambling Losses      │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                          ↕                                  │
-│  ┌─────────────────────────────────────────────────────┐   │
-│  │           HOUSE Token (ERC20)                       │   │
-│  │  Your share of the pool = your HOUSE / total HOUSE  │   │
-│  └─────────────────────────────────────────────────────┘   │
-│                                                             │
-│  Share Price = Total USDC / Total HOUSE Supply             │
-│                                                             │
-└─────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────────┐
+│                                                                     │
+│   ┌─────────────────────┐         ┌─────────────────────────────┐  │
+│   │      DiceGame       │────────▶│         HousePool           │  │
+│   │   (Game Logic)      │         │     (Liquidity Pool)        │  │
+│   └─────────────────────┘         └─────────────────────────────┘  │
+│            │                                    │                   │
+│    - Commit/Reveal                     - USDC deposits             │
+│    - Win/Loss logic                    - HOUSE token (ERC20)       │
+│    - MIN_RESERVE check                 - Delayed withdrawals       │
+│    - Calls payout()                    - payout() for game         │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
 ```
+
+### DiceGame.sol
+
+The game contract handles all betting logic:
+
+- **Deploys HousePool** in its constructor with itself as the immutable game owner
+- **Commit-reveal gambling** - fair randomness using player secret + blockhash
+- **MIN_RESERVE tracking** - ensures enough liquidity for payouts
+- **Calls `housePool.payout()`** when players win
+
+### HousePool.sol
+
+The liquidity pool contract:
+
+- **Holds all USDC** from LP deposits and player bets
+- **Issues HOUSE tokens** (ERC20) representing pool ownership
+- **Delayed withdrawals** - 10 sec cooldown prevents front-running
+- **`payout()` function** - only callable by the immutable game contract
 
 ## How It Works
 
@@ -38,18 +48,25 @@ House Pool is a single-contract gambling protocol where:
 2. **Hold** → As gamblers lose, pool grows, your shares worth more
 3. **Withdraw** → Request withdrawal (10 sec cooldown) → Execute within 1 min window
 
+```
+Share Price = Total USDC / Total HOUSE Supply
+Your Value = Your HOUSE × Share Price
+```
+
 ### For Gamblers
 
 Two-step commit-reveal process (prevents manipulation):
 
-1. **Commit**: Pay 1 USDC, submit hash of your secret
-2. **Wait**: 2+ blocks
+1. **Commit**: Pay $0.10 USDC, submit hash of your secret
+2. **Wait**: 1+ blocks
 3. **Reveal**: Submit secret, get result
 
-- **Cost**: 1 USDC
-- **Win Chance**: ~9% (1/11)
-- **Payout**: 10 USDC
-- **House Edge**: ~9%
+| Parameter  | Value      |
+| ---------- | ---------- |
+| Cost       | $0.10 USDC |
+| Win Chance | ~9%        |
+| Payout     | $1 USDC    |
+| House Edge | ~9%        |
 
 ### Withdrawal Cooldown
 
@@ -67,61 +84,68 @@ The contract tracks "effective pool" - total USDC minus pending withdrawals:
 
 ```solidity
 effectivePool = totalPool - (pendingWithdrawals value)
-canRoll = effectivePool >= MIN_RESERVE + MAX_PAYOUT
+canPlay = effectivePool >= MIN_RESERVE + ROLL_PAYOUT
 ```
 
 Gambling is blocked if effective pool is too low.
 
-### Auto Buyback & Burn (Optional)
+## Contracts
 
-When the pool exceeds a threshold (15 USDC), the contract can automatically:
+### DiceGame.sol
 
-1. Buy HOUSE tokens from Uniswap
-2. Burn them
+| Function                    | Description                           |
+| --------------------------- | ------------------------------------- |
+| `commitRoll(hash)`          | Pay $0.10 USDC, commit hash of secret |
+| `revealRoll(secret)`        | Reveal secret, get win/loss result    |
+| `canPlay()`                 | Whether gambling is currently enabled |
+| `checkRoll(player, secret)` | Preview result before revealing       |
+| `getCommitment(player)`     | Get commitment details                |
 
-This keeps Uniswap price synced and makes HOUSE deflationary.
+**Constants:**
 
-## Contract: HousePool.sol
+| Constant    | Value      | Description                          |
+| ----------- | ---------- | ------------------------------------ |
+| ROLL_COST   | $0.10 USDC | Cost to roll                         |
+| ROLL_PAYOUT | $1 USDC    | Win payout                           |
+| WIN_MODULO  | 11         | 1/11 win chance                      |
+| MIN_RESERVE | $3 USDC    | Minimum pool for game to be playable |
 
-Single contract that handles everything:
+### HousePool.sol
 
-### LP Functions
+**LP Functions:**
 
-- `deposit(usdcAmount)` - Deposit USDC, receive HOUSE shares
-- `requestWithdrawal(shares)` - Start 10 sec cooldown
-- `withdraw()` - Execute within 1 min window
-- `cancelWithdrawal()` - Cancel pending request
-- `cleanupExpiredWithdrawal(address)` - Anyone can clear expired requests
+| Function                            | Description                        |
+| ----------------------------------- | ---------------------------------- |
+| `deposit(usdcAmount)`               | Deposit USDC, receive HOUSE shares |
+| `requestWithdrawal(shares)`         | Start 10 sec cooldown              |
+| `withdraw()`                        | Execute within 1 min window        |
+| `cancelWithdrawal()`                | Cancel pending request             |
+| `cleanupExpiredWithdrawal(address)` | Anyone can clear expired requests  |
 
-### Gambling Functions
+**View Functions:**
 
-- `commitRoll(hash)` - Pay 1 USDC, commit hash of secret
-- `revealRoll(secret)` - After 2+ blocks, reveal to get result
+| Function             | Description                                   |
+| -------------------- | --------------------------------------------- |
+| `totalPool()`        | Total USDC in contract                        |
+| `effectivePool()`    | Pool minus pending withdrawal value           |
+| `sharePrice()`       | Current USDC per HOUSE (18 decimal precision) |
+| `usdcValue(address)` | USDC value of an LP's holdings                |
+| `game()`             | Address of the immutable game contract        |
 
-### View Functions
+**Game Functions (only callable by DiceGame):**
 
-- `totalPool()` - Total USDC in contract
-- `effectivePool()` - Pool minus pending withdrawal value
-- `sharePrice()` - Current USDC per HOUSE (18 decimal precision)
-- `canRoll()` - Whether gambling is currently enabled
-- `usdcValue(address)` - USDC value of an LP's holdings
+| Function                         | Description                  |
+| -------------------------------- | ---------------------------- |
+| `receivePayment(player, amount)` | Pull bet payment from player |
+| `payout(player, amount)`         | Send winnings to player      |
 
-### Owner Functions
-
-- `mintForLiquidity(to, amount)` - One-time mint to seed Uniswap
-- `setUniswapRouter(address)` - Configure Uniswap for buybacks
-
-## Constants
+**Constants:**
 
 | Constant          | Value      | Description                |
 | ----------------- | ---------- | -------------------------- |
-| ROLL_COST         | 1 USDC     | Cost to roll               |
-| ROLL_PAYOUT       | 10 USDC    | Win payout                 |
-| WIN_MODULO        | 11         | 1/11 win chance            |
-| MIN_RESERVE       | 30 USDC    | Minimum pool for payouts   |
-| BUYBACK_THRESHOLD | 15 USDC    | Trigger buyback above this |
 | WITHDRAWAL_DELAY  | 10 seconds | Cooldown before withdrawal |
 | WITHDRAWAL_WINDOW | 1 minute   | Time to execute withdrawal |
+| MIN_FIRST_DEPOSIT | 1 USDC     | Minimum first deposit      |
 
 ## Quickstart
 
@@ -131,10 +155,10 @@ Single contract that handles everything:
 yarn install
 ```
 
-2. Run a local network:
+2. Fork Base mainnet locally:
 
 ```bash
-yarn chain
+yarn fork --network base
 ```
 
 3. Deploy contracts:
@@ -149,53 +173,56 @@ yarn deploy
 yarn start
 ```
 
-Visit `http://localhost:3000` to interact with the House Pool.
+Visit `http://localhost:3000` to interact with DAMM.
 
 ## Testing
 
 ```bash
 cd packages/foundry
-forge test --match-contract HousePoolTest -vv
+forge test -vv
 ```
 
 Tests cover:
 
+- Deployment and immutable linkage
 - Deposit/withdraw mechanics and share calculations
 - Withdrawal cooldown and expiry
 - Effective pool accounting
 - Commit-reveal gambling flow
 - Minimum reserve protections
-- Owner functions
+- Authorization (only game can call payout)
 
-## Architecture
+## Project Structure
 
 ```
 packages/
 ├── foundry/
 │   ├── contracts/
-│   │   └── HousePool.sol     # Single contract: ERC20 + Gambling + LP
+│   │   ├── DiceGame.sol      # Game logic, deploys HousePool
+│   │   └── HousePool.sol     # Liquidity pool, HOUSE token
 │   ├── script/
-│   │   ├── Deploy.s.sol
-│   │   └── DeployHousePool.s.sol
+│   │   └── Deploy.s.sol      # Deploys DiceGame (which deploys HousePool)
 │   └── test/
-│       └── HousePool.t.sol
+│       └── HousePool.t.sol   # Tests for both contracts
 └── nextjs/
     └── app/
-        ├── house/            # Main LP + gambling UI
-        └── page.tsx          # Landing page
+        ├── page.tsx          # Gambling UI
+        └── house/            # LP management UI
 ```
 
 ## Key Design Decisions
 
-1. **One token, not two**: HOUSE = LP token = house ownership. No separate "credit" token.
+1. **Two contracts, immutable linkage**: DiceGame deploys HousePool with itself as the game. No admin functions, no way to change it.
 
-2. **No AMM**: Share price is simply `totalUSDC / totalShares`. Trade on external DEXs if needed.
+2. **Game owns the pool**: Only DiceGame can call `payout()`. The relationship is set in the constructor and immutable.
 
-3. **Commit-reveal gambling**: Prevents both miner manipulation and LP front-running.
+3. **Separation of concerns**: HousePool only handles liquidity. DiceGame handles all betting logic and reserve checks.
 
-4. **Withdrawal cooldown + expiry**: 10 sec wait, 1 min window. Prevents griefing (signaling but never withdrawing).
+4. **Commit-reveal gambling**: Prevents both miner manipulation and LP front-running.
 
-5. **Effective pool accounting**: Pending withdrawals reduce available liquidity immediately.
+5. **Withdrawal cooldown + expiry**: 10 sec wait, 1 min window. Prevents griefing (signaling but never withdrawing).
+
+6. **Effective pool accounting**: Pending withdrawals reduce available liquidity immediately.
 
 ## License
 

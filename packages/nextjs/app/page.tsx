@@ -3,16 +3,29 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import type { NextPage } from "next";
-import { decodeEventLog, formatUnits, keccak256, parseUnits, toHex } from "viem";
+import { decodeEventLog, formatUnits, keccak256, toHex } from "viem";
 import { useAccount, useReadContract, useWaitForTransactionReceipt, useWriteContract } from "wagmi";
 import { ArrowPathIcon, CubeIcon, HomeModernIcon, SparklesIcon } from "@heroicons/react/24/outline";
-import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
 
 // USDC has 6 decimals
 const USDC_DECIMALS = 6;
 
 // Base USDC address
 const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
+
+// RollRevealed event ABI for decoding (from DiceGame)
+const rollRevealedAbi = [
+  {
+    type: "event",
+    name: "RollRevealed",
+    inputs: [
+      { name: "player", type: "address", indexed: true },
+      { name: "won", type: "bool", indexed: false },
+      { name: "payout", type: "uint256", indexed: false },
+    ],
+  },
+] as const;
 
 // USDC ABI for approve and balance
 const USDC_ABI = [
@@ -35,6 +48,17 @@ const USDC_ABI = [
   },
 ] as const;
 
+// HousePool ABI (minimal - only for effectivePool)
+const HOUSE_POOL_ABI = [
+  {
+    inputs: [],
+    name: "effectivePool",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
 const Home: NextPage = () => {
   const { address: connectedAddress } = useAccount();
 
@@ -45,18 +69,34 @@ const Home: NextPage = () => {
   const [revealTxHash, setRevealTxHash] = useState<`0x${string}` | undefined>(undefined);
   const [isWaitingForApproval, setIsWaitingForApproval] = useState(false);
 
-  // Get contract info
-  const { data: housePoolContract } = useDeployedContractInfo({ contractName: "HousePool" });
+  // Read HousePool address from DiceGame contract
+  const { data: housePoolAddress } = useScaffoldReadContract({
+    contractName: "DiceGame",
+    functionName: "housePool",
+  });
 
-  // Read pool stats
-  const { data: effectivePool, refetch: refetchEffectivePool } = useScaffoldReadContract({
-    contractName: "HousePool",
+  // Read pool stats from HousePool using the dynamic address
+  const { data: effectivePool, refetch: refetchEffectivePool } = useReadContract({
+    address: housePoolAddress,
+    abi: HOUSE_POOL_ABI,
     functionName: "effectivePool",
   });
 
-  const { data: canRoll, refetch: refetchCanRoll } = useScaffoldReadContract({
-    contractName: "HousePool",
-    functionName: "canRoll",
+  // Read canPlay from DiceGame (replaces canRoll from HousePool)
+  const { data: canPlay, refetch: refetchCanPlay } = useScaffoldReadContract({
+    contractName: "DiceGame",
+    functionName: "canPlay",
+  });
+
+  // Read game parameters from contract (not hardcoded!)
+  const { data: rollCost } = useScaffoldReadContract({
+    contractName: "DiceGame",
+    functionName: "ROLL_COST",
+  });
+
+  const { data: rollPayout } = useScaffoldReadContract({
+    contractName: "DiceGame",
+    functionName: "ROLL_PAYOUT",
   });
 
   // Read user USDC balance
@@ -67,23 +107,23 @@ const Home: NextPage = () => {
     args: connectedAddress ? [connectedAddress] : undefined,
   });
 
-  // Read commitment
+  // Read commitment from DiceGame
   const { data: commitment, refetch: refetchCommitment } = useScaffoldReadContract({
-    contractName: "HousePool",
+    contractName: "DiceGame",
     functionName: "getCommitment",
     args: [connectedAddress],
   });
 
-  // Check roll result (only when we have a pending secret)
+  // Check roll result from DiceGame (only when we have a pending secret)
   const { data: rollCheck, refetch: refetchRollCheck } = useScaffoldReadContract({
-    contractName: "HousePool",
+    contractName: "DiceGame",
     functionName: "checkRoll",
     args: [connectedAddress, pendingSecret as `0x${string}` | undefined],
   });
 
-  // Write hooks
-  const { writeContractAsync: writeHousePool, isPending: isHousePoolWritePending } = useScaffoldWriteContract({
-    contractName: "HousePool",
+  // Write hooks - DiceGame for gambling, USDC for approvals
+  const { writeContractAsync: writeDiceGame, isPending: isDiceGameWritePending } = useScaffoldWriteContract({
+    contractName: "DiceGame",
   });
 
   const { writeContractAsync: writeUsdc, isPending: isUsdcWritePending } = useWriteContract();
@@ -92,19 +132,6 @@ const Home: NextPage = () => {
   const { data: revealReceipt } = useWaitForTransactionReceipt({
     hash: revealTxHash,
   });
-
-  // RollRevealed event ABI for decoding
-  const rollRevealedAbi = [
-    {
-      type: "event",
-      name: "RollRevealed",
-      inputs: [
-        { name: "player", type: "address", indexed: true },
-        { name: "won", type: "bool", indexed: false },
-        { name: "payout", type: "uint256", indexed: false },
-      ],
-    },
-  ] as const;
 
   // Parse RollRevealed event when receipt arrives
   useEffect(() => {
@@ -146,11 +173,11 @@ const Home: NextPage = () => {
   // Refetch all data
   const refetchAll = useCallback(() => {
     refetchEffectivePool();
-    refetchCanRoll();
+    refetchCanPlay();
     refetchUserUsdcBalance();
     refetchCommitment();
     refetchRollCheck();
-  }, [refetchEffectivePool, refetchCanRoll, refetchUserUsdcBalance, refetchCommitment, refetchRollCheck]);
+  }, [refetchEffectivePool, refetchCanPlay, refetchUserUsdcBalance, refetchCommitment, refetchRollCheck]);
 
   // Auto-refresh (faster when waiting for result)
   useEffect(() => {
@@ -168,7 +195,7 @@ const Home: NextPage = () => {
 
   // Handle commit roll
   const handleCommitRoll = async () => {
-    if (!housePoolContract) return;
+    if (!housePoolAddress || !rollCost) return;
 
     try {
       const secret = gamblingSecret || generateSecret();
@@ -177,12 +204,12 @@ const Home: NextPage = () => {
       setPendingSecret(secret);
       localStorage.setItem("pendingGamblingSecret", secret);
 
-      const rollCost = parseUnits("1", USDC_DECIMALS);
+      // Approve HousePool (DiceGame calls housePool.receivePayment which does transferFrom)
       await writeUsdc({
         address: USDC_ADDRESS,
         abi: USDC_ABI,
         functionName: "approve",
-        args: [housePoolContract.address, rollCost],
+        args: [housePoolAddress, rollCost],
       });
 
       // Wait 3 seconds for approval to settle on-chain
@@ -190,7 +217,8 @@ const Home: NextPage = () => {
       await new Promise(resolve => setTimeout(resolve, 3000));
       setIsWaitingForApproval(false);
 
-      await writeHousePool({
+      // Call DiceGame.commitRoll (not HousePool)
+      await writeDiceGame({
         functionName: "commitRoll",
         args: [commitHash],
       });
@@ -219,7 +247,8 @@ const Home: NextPage = () => {
     try {
       setLastRollResult(null);
 
-      const hash = await writeHousePool({
+      // Call DiceGame.revealRoll (not HousePool)
+      const hash = await writeDiceGame({
         functionName: "revealRoll",
         args: [secret as `0x${string}`],
       });
@@ -252,7 +281,7 @@ const Home: NextPage = () => {
     }
   }, []);
 
-  const isLoading = isHousePoolWritePending || isUsdcWritePending || isWaitingForApproval;
+  const isLoading = isDiceGameWritePending || isUsdcWritePending || isWaitingForApproval;
 
   // Format helpers
   const formatUsdc = (value: bigint | undefined) =>
@@ -276,7 +305,7 @@ const Home: NextPage = () => {
           </span>
         </h1>
         <p className="text-base-content/60 mb-6 text-center max-w-md">
-          Pay 1 USDC, ~9% chance to win 10 USDC. Fair commit-reveal randomness.
+          Pay ${formatUsdc(rollCost)}, ~9% chance to win ${formatUsdc(rollPayout)}. Fair commit-reveal randomness.
         </p>
       </div>
 
@@ -297,7 +326,7 @@ const Home: NextPage = () => {
       <div className="flex gap-6 mb-8 text-center">
         <div className="bg-base-100/50 backdrop-blur rounded-xl px-6 py-3 border border-base-300">
           <p className="text-xs text-base-content/50 uppercase">Cost</p>
-          <p className="text-xl font-bold">1 USDC</p>
+          <p className="text-xl font-bold">${formatUsdc(rollCost)}</p>
         </div>
         <div className="bg-base-100/50 backdrop-blur rounded-xl px-6 py-3 border border-base-300">
           <p className="text-xs text-base-content/50 uppercase">Win Rate</p>
@@ -305,7 +334,7 @@ const Home: NextPage = () => {
         </div>
         <div className="bg-base-100/50 backdrop-blur rounded-xl px-6 py-3 border border-base-300">
           <p className="text-xs text-base-content/50 uppercase">Payout</p>
-          <p className="text-xl font-bold text-green-400">10 USDC</p>
+          <p className="text-xl font-bold text-green-400">${formatUsdc(rollPayout)}</p>
         </div>
         <div className="bg-base-100/50 backdrop-blur rounded-xl px-6 py-3 border border-base-300">
           <p className="text-xs text-base-content/50 uppercase">Pool</p>
@@ -335,7 +364,7 @@ const Home: NextPage = () => {
           </div>
         )}
 
-        {!canRoll ? (
+        {!canPlay ? (
           <div className="bg-error/10 border border-error/30 rounded-xl p-6 text-center">
             <div className="text-4xl mb-2">🚫</div>
             <p className="text-error font-bold text-lg">Rolling Disabled</p>
@@ -352,7 +381,7 @@ const Home: NextPage = () => {
                 <div className="rounded-2xl p-8 text-center border-2 bg-gradient-to-br from-green-500/20 to-emerald-500/20 border-green-500">
                   <div className="text-6xl mb-3">🎉</div>
                   <p className="text-3xl font-black text-green-400">YOU WON!</p>
-                  <p className="text-xl mt-2">Claim your 10 USDC below</p>
+                  <p className="text-xl mt-2">Claim your ${formatUsdc(rollPayout)} below</p>
                 </div>
               ) : (
                 <div className="rounded-2xl p-8 text-center border-2 bg-gradient-to-br from-red-500/20 to-orange-500/20 border-red-500">
@@ -427,7 +456,7 @@ const Home: NextPage = () => {
                 ) : (
                   <>
                     <ArrowPathIcon className="h-6 w-6" />
-                    CLAIM 10 USDC!
+                    CLAIM ${formatUsdc(rollPayout)}!
                   </>
                 )}
               </button>
@@ -453,7 +482,7 @@ const Home: NextPage = () => {
                 ) : (
                   <>
                     <SparklesIcon className="h-6 w-6" />
-                    ROLL AGAIN (1 USDC)
+                    ROLL AGAIN (${formatUsdc(rollCost)})
                   </>
                 )}
               </button>
@@ -463,7 +492,9 @@ const Home: NextPage = () => {
               <div className="bg-error/20 border border-error/40 rounded-xl p-4 text-center">
                 <div className="text-3xl mb-2">💸</div>
                 <p className="text-error font-bold">Commitment Expired</p>
-                <p className="text-sm text-base-content/60 mt-1">Your 1 USDC stake was forfeited to the house.</p>
+                <p className="text-sm text-base-content/60 mt-1">
+                  Your ${formatUsdc(rollCost)} stake was forfeited to the house.
+                </p>
                 <button
                   className="btn btn-primary btn-sm mt-3"
                   onClick={async () => {
@@ -491,7 +522,7 @@ const Home: NextPage = () => {
             <button
               className="btn btn-primary btn-lg w-full gap-2 text-lg"
               onClick={handleCommitRoll}
-              disabled={isLoading || !connectedAddress}
+              disabled={isLoading || !connectedAddress || !rollCost}
             >
               {isLoading ? (
                 <>
@@ -501,7 +532,7 @@ const Home: NextPage = () => {
               ) : (
                 <>
                   <SparklesIcon className="h-6 w-6" />
-                  ROLL (1 USDC)
+                  ROLL (${formatUsdc(rollCost)})
                 </>
               )}
             </button>

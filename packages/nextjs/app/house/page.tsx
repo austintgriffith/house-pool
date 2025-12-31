@@ -6,7 +6,7 @@ import type { NextPage } from "next";
 import { formatUnits, parseUnits } from "viem";
 import { useAccount, useReadContract, useWriteContract } from "wagmi";
 import { BanknotesIcon, ClockIcon, MinusCircleIcon, PlusCircleIcon, SparklesIcon } from "@heroicons/react/24/outline";
-import { useDeployedContractInfo, useScaffoldReadContract, useScaffoldWriteContract } from "~~/hooks/scaffold-eth";
+import { useScaffoldReadContract } from "~~/hooks/scaffold-eth";
 
 // USDC has 6 decimals, HOUSE has 18 decimals
 const USDC_DECIMALS = 6;
@@ -36,6 +36,100 @@ const USDC_ABI = [
   },
 ] as const;
 
+// HousePool ABI (minimal - only functions we need)
+const HOUSE_POOL_ABI = [
+  {
+    inputs: [{ name: "usdcAmount", type: "uint256" }],
+    name: "deposit",
+    outputs: [{ name: "shares", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "shares", type: "uint256" }],
+    name: "requestWithdrawal",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "withdraw",
+    outputs: [{ name: "usdcOut", type: "uint256" }],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "cancelWithdrawal",
+    outputs: [],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "totalPool",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "effectivePool",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "sharePrice",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "totalSupply",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "totalPendingShares",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "account", type: "address" }],
+    name: "balanceOf",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "lp", type: "address" }],
+    name: "usdcValue",
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [{ name: "lp", type: "address" }],
+    name: "getWithdrawalRequest",
+    outputs: [
+      { name: "shares", type: "uint256" },
+      { name: "unlockTime", type: "uint256" },
+      { name: "expiryTime", type: "uint256" },
+      { name: "canWithdraw", type: "bool" },
+      { name: "isExpired", type: "bool" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
+
 const HousePage: NextPage = () => {
   const { address: connectedAddress } = useAccount();
 
@@ -43,52 +137,64 @@ const HousePage: NextPage = () => {
   const [depositAmount, setDepositAmount] = useState("");
   const [withdrawShares, setWithdrawShares] = useState("");
   const [isWaitingForApproval, setIsWaitingForApproval] = useState(false);
+  const [countdownSeconds, setCountdownSeconds] = useState<number | null>(null);
 
-  // Get contract info
-  const { data: housePoolContract } = useDeployedContractInfo({ contractName: "HousePool" });
+  // Read HousePool address from DiceGame contract
+  const { data: housePoolAddress } = useScaffoldReadContract({
+    contractName: "DiceGame",
+    functionName: "housePool",
+  });
 
-  // Read pool stats
-  const { data: totalPool, refetch: refetchTotalPool } = useScaffoldReadContract({
-    contractName: "HousePool",
+  // Read canPlay from DiceGame (game checks its own reserve requirements)
+  const { data: canPlay, refetch: refetchCanPlay } = useScaffoldReadContract({
+    contractName: "DiceGame",
+    functionName: "canPlay",
+  });
+
+  // Read pool stats from HousePool using the dynamic address
+  const { data: totalPool, refetch: refetchTotalPool } = useReadContract({
+    address: housePoolAddress,
+    abi: HOUSE_POOL_ABI,
     functionName: "totalPool",
   });
 
-  const { data: effectivePool, refetch: refetchEffectivePool } = useScaffoldReadContract({
-    contractName: "HousePool",
+  const { data: effectivePool, refetch: refetchEffectivePool } = useReadContract({
+    address: housePoolAddress,
+    abi: HOUSE_POOL_ABI,
     functionName: "effectivePool",
   });
 
-  const { data: sharePrice, refetch: refetchSharePrice } = useScaffoldReadContract({
-    contractName: "HousePool",
+  const { data: sharePrice, refetch: refetchSharePrice } = useReadContract({
+    address: housePoolAddress,
+    abi: HOUSE_POOL_ABI,
     functionName: "sharePrice",
   });
 
-  const { data: canRoll, refetch: refetchCanRoll } = useScaffoldReadContract({
-    contractName: "HousePool",
-    functionName: "canRoll",
-  });
-
-  const { data: totalSupply, refetch: refetchTotalSupply } = useScaffoldReadContract({
-    contractName: "HousePool",
+  const { data: totalSupply, refetch: refetchTotalSupply } = useReadContract({
+    address: housePoolAddress,
+    abi: HOUSE_POOL_ABI,
     functionName: "totalSupply",
   });
 
-  const { refetch: refetchTotalPendingShares } = useScaffoldReadContract({
-    contractName: "HousePool",
+  const { refetch: refetchTotalPendingShares } = useReadContract({
+    address: housePoolAddress,
+    abi: HOUSE_POOL_ABI,
     functionName: "totalPendingShares",
   });
 
   // Read user balances
-  const { data: userHouseBalance, refetch: refetchUserHouseBalance } = useScaffoldReadContract({
-    contractName: "HousePool",
+  const { data: userHouseBalance, refetch: refetchUserHouseBalance } = useReadContract({
+    address: housePoolAddress,
+    abi: HOUSE_POOL_ABI,
     functionName: "balanceOf",
-    args: [connectedAddress],
+    args: connectedAddress ? [connectedAddress] : undefined,
   });
 
-  const { data: userUsdcValue, refetch: refetchUserUsdcValue } = useScaffoldReadContract({
-    contractName: "HousePool",
+  const { data: userUsdcValue, refetch: refetchUserUsdcValue } = useReadContract({
+    address: housePoolAddress,
+    abi: HOUSE_POOL_ABI,
     functionName: "usdcValue",
-    args: [connectedAddress],
+    args: connectedAddress ? [connectedAddress] : undefined,
   });
 
   const { data: userUsdcBalance, refetch: refetchUserUsdcBalance } = useReadContract({
@@ -99,17 +205,15 @@ const HousePage: NextPage = () => {
   });
 
   // Read withdrawal request
-  const { data: withdrawalRequest, refetch: refetchWithdrawalRequest } = useScaffoldReadContract({
-    contractName: "HousePool",
+  const { data: withdrawalRequest, refetch: refetchWithdrawalRequest } = useReadContract({
+    address: housePoolAddress,
+    abi: HOUSE_POOL_ABI,
     functionName: "getWithdrawalRequest",
-    args: [connectedAddress],
+    args: connectedAddress ? [connectedAddress] : undefined,
   });
 
   // Write hooks
-  const { writeContractAsync: writeHousePool, isPending: isHousePoolWritePending } = useScaffoldWriteContract({
-    contractName: "HousePool",
-  });
-
+  const { writeContractAsync: writeHousePool, isPending: isHousePoolWritePending } = useWriteContract();
   const { writeContractAsync: writeUsdc, isPending: isUsdcWritePending } = useWriteContract();
 
   // Refetch all data
@@ -117,7 +221,7 @@ const HousePage: NextPage = () => {
     refetchTotalPool();
     refetchEffectivePool();
     refetchSharePrice();
-    refetchCanRoll();
+    refetchCanPlay();
     refetchTotalSupply();
     refetchTotalPendingShares();
     refetchUserHouseBalance();
@@ -128,7 +232,7 @@ const HousePage: NextPage = () => {
     refetchTotalPool,
     refetchEffectivePool,
     refetchSharePrice,
-    refetchCanRoll,
+    refetchCanPlay,
     refetchTotalSupply,
     refetchTotalPendingShares,
     refetchUserHouseBalance,
@@ -143,9 +247,40 @@ const HousePage: NextPage = () => {
     return () => clearInterval(interval);
   }, [refetchAll]);
 
+  // Countdown timer for pending withdrawal
+  useEffect(() => {
+    if (!withdrawalRequest || withdrawalRequest[0] === 0n) {
+      setCountdownSeconds(null);
+      return;
+    }
+
+    const unlockTime = Number(withdrawalRequest[1]) * 1000;
+    const canWithdraw = withdrawalRequest[3];
+    const isExpired = withdrawalRequest[4];
+
+    if (canWithdraw || isExpired) {
+      setCountdownSeconds(null);
+      return;
+    }
+
+    const updateCountdown = () => {
+      const now = Date.now();
+      const remaining = Math.max(0, Math.ceil((unlockTime - now) / 1000));
+      setCountdownSeconds(remaining);
+
+      if (remaining === 0) {
+        refetchWithdrawalRequest();
+      }
+    };
+
+    updateCountdown();
+    const interval = setInterval(updateCountdown, 1000);
+    return () => clearInterval(interval);
+  }, [withdrawalRequest, refetchWithdrawalRequest]);
+
   // Handle deposit
   const handleDeposit = async () => {
-    if (!depositAmount || !housePoolContract) return;
+    if (!depositAmount || !housePoolAddress) return;
 
     try {
       const amountUsdc = parseUnits(depositAmount, USDC_DECIMALS);
@@ -155,7 +290,7 @@ const HousePage: NextPage = () => {
         address: USDC_ADDRESS,
         abi: USDC_ABI,
         functionName: "approve",
-        args: [housePoolContract.address, amountUsdc],
+        args: [housePoolAddress, amountUsdc],
       });
 
       // Wait 3 seconds for approval to settle on-chain
@@ -165,6 +300,8 @@ const HousePage: NextPage = () => {
 
       // Deposit
       await writeHousePool({
+        address: housePoolAddress,
+        abi: HOUSE_POOL_ABI,
         functionName: "deposit",
         args: [amountUsdc],
       });
@@ -179,12 +316,14 @@ const HousePage: NextPage = () => {
 
   // Handle request withdrawal
   const handleRequestWithdrawal = async () => {
-    if (!withdrawShares) return;
+    if (!withdrawShares || !housePoolAddress) return;
 
     try {
       const shares = parseUnits(withdrawShares, HOUSE_DECIMALS);
 
       await writeHousePool({
+        address: housePoolAddress,
+        abi: HOUSE_POOL_ABI,
         functionName: "requestWithdrawal",
         args: [shares],
       });
@@ -198,8 +337,12 @@ const HousePage: NextPage = () => {
 
   // Handle execute withdrawal
   const handleWithdraw = async () => {
+    if (!housePoolAddress) return;
+
     try {
       await writeHousePool({
+        address: housePoolAddress,
+        abi: HOUSE_POOL_ABI,
         functionName: "withdraw",
       });
 
@@ -211,8 +354,12 @@ const HousePage: NextPage = () => {
 
   // Handle cancel withdrawal
   const handleCancelWithdrawal = async () => {
+    if (!housePoolAddress) return;
+
     try {
       await writeHousePool({
+        address: housePoolAddress,
+        abi: HOUSE_POOL_ABI,
         functionName: "cancelWithdrawal",
       });
 
@@ -253,8 +400,6 @@ const HousePage: NextPage = () => {
   const hasWithdrawalRequest = withdrawalRequest && withdrawalRequest[0] > 0n;
   const withdrawalCanExecute = withdrawalRequest && withdrawalRequest[3];
   const withdrawalIsExpired = withdrawalRequest && withdrawalRequest[4];
-  const withdrawalUnlockTime = withdrawalRequest ? new Date(Number(withdrawalRequest[1]) * 1000) : null;
-  const withdrawalExpiryTime = withdrawalRequest ? new Date(Number(withdrawalRequest[2]) * 1000) : null;
 
   return (
     <div className="flex flex-col items-center pt-8 px-4 pb-12 min-h-screen bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-primary/10 via-base-100 to-base-100">
@@ -286,9 +431,9 @@ const HousePage: NextPage = () => {
           <p className="text-2xl font-bold">{formatHouse(totalSupply)}</p>
         </div>
         <div className="bg-base-100/80 backdrop-blur rounded-2xl p-4 shadow-lg border border-base-300">
-          <p className="text-xs text-base-content/50 uppercase tracking-wide">Can Roll?</p>
-          <p className={`text-2xl font-bold ${canRoll ? "text-success" : "text-error"}`}>
-            {canRoll ? "Yes ✓" : "No ✗"}
+          <p className="text-xs text-base-content/50 uppercase tracking-wide">Can Play?</p>
+          <p className={`text-2xl font-bold ${canPlay ? "text-success" : "text-error"}`}>
+            {canPlay ? "Yes ✓" : "No ✗"}
           </p>
         </div>
       </div>
@@ -338,7 +483,7 @@ const HousePage: NextPage = () => {
           <button
             className="btn btn-primary w-full"
             onClick={handleDeposit}
-            disabled={isLoading || !depositAmount || !connectedAddress}
+            disabled={isLoading || !depositAmount || !connectedAddress || !housePoolAddress}
           >
             {isLoading ? (
               <>
@@ -370,12 +515,16 @@ const HousePage: NextPage = () => {
               ) : withdrawalCanExecute ? (
                 <>
                   <div className="text-success text-sm font-semibold">Ready to confirm sale!</div>
-                  <div className="text-xs text-base-content/60">Expires: {withdrawalExpiryTime?.toLocaleString()}</div>
+                  <div className="text-xs text-base-content/60">Expires in 60 seconds</div>
                 </>
               ) : (
                 <div className="text-warning text-sm flex items-center gap-1">
                   <ClockIcon className="h-4 w-4" />
-                  Confirm available: {withdrawalUnlockTime?.toLocaleString()}
+                  {countdownSeconds !== null && countdownSeconds > 0 ? (
+                    <span className="font-mono font-bold">{countdownSeconds}s</span>
+                  ) : (
+                    <span>Almost ready...</span>
+                  )}
                 </div>
               )}
 
@@ -423,7 +572,7 @@ const HousePage: NextPage = () => {
               <button
                 className="btn btn-secondary w-full"
                 onClick={handleRequestWithdrawal}
-                disabled={isLoading || !withdrawShares || !connectedAddress}
+                disabled={isLoading || !withdrawShares || !connectedAddress || !housePoolAddress}
               >
                 Sell HOUSE
               </button>

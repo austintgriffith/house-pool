@@ -2,10 +2,10 @@
 pragma solidity ^0.8.24;
 
 import "./DeployHelpers.s.sol";
-import "../contracts/HousePool.sol";
+import "../contracts/DiceGame.sol";
 
 /**
- * @notice Deployment script for HousePool on Base fork
+ * @notice Deployment script for DiceGame (which deploys HousePool)
  * @dev Uses real USDC on Base: 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
  * 
  * Usage:
@@ -17,11 +17,16 @@ contract DeployScript is ScaffoldETHDeploy {
     address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
     function run() external ScaffoldEthDeployerRunner {
-        // Deploy HousePool with real USDC
-        HousePool housePool = new HousePool(USDC);
+        // Deploy DiceGame (which deploys its own HousePool internally)
+        DiceGame diceGame = new DiceGame(USDC);
+        
+        // Export both contracts for Scaffold-ETH
+        deployments.push(Deployment("DiceGame", address(diceGame)));
+        deployments.push(Deployment("HousePool", address(diceGame.housePool())));
         
         console.log("=== DEPLOYMENT COMPLETE ===");
-        console.log("HousePool:", address(housePool));
+        console.log("DiceGame:", address(diceGame));
+        console.log("HousePool:", address(diceGame.housePool()));
         console.log("USDC:", USDC);
         console.log("");
         console.log("Next: Approve USDC and call housePool.deposit(amount) to seed liquidity");

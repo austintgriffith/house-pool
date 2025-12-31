@@ -17,64 +17,17 @@ const deployedContracts = {
               type: "address",
               internalType: "address",
             },
+            {
+              name: "_game",
+              type: "address",
+              internalType: "address",
+            },
           ],
           stateMutability: "nonpayable",
         },
         {
           type: "function",
           name: "MIN_FIRST_DEPOSIT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "MIN_RESERVE",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "ROLL_COST",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "ROLL_PAYOUT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "WIN_MODULO",
           inputs: [],
           outputs: [
             {
@@ -180,63 +133,8 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "canRoll",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "cancelWithdrawal",
           inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "checkRoll",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "secret",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "canCheck",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "isWinner",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "cleanupExpiredCommit",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              internalType: "address",
-            },
-          ],
           outputs: [],
           stateMutability: "nonpayable",
         },
@@ -252,43 +150,6 @@ const deployedContracts = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "commitRoll",
-          inputs: [
-            {
-              name: "commitHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "commits",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "hash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "blockNumber",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -324,6 +185,30 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "deposit",
+          inputs: [
+            {
+              name: "usdcAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "minSharesOut",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "shares",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "effectivePool",
           inputs: [],
           outputs: [
@@ -337,34 +222,13 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "getCommitment",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              internalType: "address",
-            },
-          ],
+          name: "game",
+          inputs: [],
           outputs: [
             {
-              name: "hash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "blockNumber",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "canReveal",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "isExpired",
-              type: "bool",
-              internalType: "bool",
+              name: "",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -423,21 +287,37 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "owner",
-          inputs: [],
-          outputs: [
+          name: "payout",
+          inputs: [
             {
-              name: "",
+              name: "player",
               type: "address",
               internalType: "address",
             },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
           ],
-          stateMutability: "view",
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
-          name: "renounceOwnership",
-          inputs: [],
+          name: "receivePayment",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
           outputs: [],
           stateMutability: "nonpayable",
         },
@@ -452,25 +332,6 @@ const deployedContracts = {
             },
           ],
           outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "revealRoll",
-          inputs: [
-            {
-              name: "secret",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "won",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
           stateMutability: "nonpayable",
         },
         {
@@ -593,19 +454,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "transferOwnership",
-          inputs: [
-            {
-              name: "newOwner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "usdc",
           inputs: [],
           outputs: [
@@ -635,6 +483,25 @@ const deployedContracts = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "withdraw",
+          inputs: [
+            {
+              name: "minUsdcOut",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "usdcOut",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -730,45 +597,7 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "OwnershipTransferred",
-          inputs: [
-            {
-              name: "previousOwner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "newOwner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RollCommitted",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "commitment",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RollForfeited",
+          name: "PaymentReceived",
           inputs: [
             {
               name: "player",
@@ -787,7 +616,7 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "RollRevealed",
+          name: "PayoutSent",
           inputs: [
             {
               name: "player",
@@ -796,13 +625,7 @@ const deployedContracts = {
               internalType: "address",
             },
             {
-              name: "won",
-              type: "bool",
-              indexed: false,
-              internalType: "bool",
-            },
-            {
-              name: "payout",
+              name: "amount",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -1027,54 +850,27 @@ const deployedContracts = {
         },
         {
           type: "error",
-          name: "InvalidReveal",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "NoCommitment",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "NoPendingWithdrawal",
           inputs: [],
         },
         {
           type: "error",
-          name: "OwnableInvalidOwner",
-          inputs: [
-            {
-              name: "owner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "OwnableUnauthorizedAccount",
-          inputs: [
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "TooEarly",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "TooLate",
+          name: "SlippageExceeded",
           inputs: [],
         },
         {
           type: "error",
           name: "TransferFailed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "Unauthorized",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "WithdrawalAlreadyPending",
           inputs: [],
         },
         {
@@ -1089,7 +885,17 @@ const deployedContracts = {
         },
         {
           type: "error",
+          name: "ZeroAddress",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "ZeroAmount",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ZeroShares",
           inputs: [],
         },
       ],
@@ -1098,8 +904,8 @@ const deployedContracts = {
     },
   },
   31337: {
-    HousePool: {
-      address: "0x2f8a34bb1721684658827b3aa72ef8260d5bbbbb",
+    DiceGame: {
+      address: "0x7964b67627b48e07a236339559b74b92881711d0",
       abi: [
         {
           type: "constructor",
@@ -1114,19 +920,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "MIN_FIRST_DEPOSIT",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "MIN_RESERVE",
           inputs: [],
           outputs: [
@@ -1167,6 +960,269 @@ const deployedContracts = {
         {
           type: "function",
           name: "WIN_MODULO",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "canPlay",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "checkRoll",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "secret",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "canCheck",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "isWinner",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "commitRoll",
+          inputs: [
+            {
+              name: "commitHash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "commits",
+          inputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "hash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "blockNumber",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getCommitment",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          outputs: [
+            {
+              name: "hash",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+            {
+              name: "blockNumber",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "canReveal",
+              type: "bool",
+              internalType: "bool",
+            },
+            {
+              name: "isExpired",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "housePool",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract HousePool",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "revealRoll",
+          inputs: [
+            {
+              name: "secret",
+              type: "bytes32",
+              internalType: "bytes32",
+            },
+          ],
+          outputs: [
+            {
+              name: "won",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "usdc",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "address",
+              internalType: "contract IERC20",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "event",
+          name: "RollCommitted",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "commitment",
+              type: "bytes32",
+              indexed: false,
+              internalType: "bytes32",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
+          name: "RollRevealed",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "won",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+            {
+              name: "payout",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "error",
+          name: "GameNotPlayable",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "InvalidReveal",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "NoCommitment",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "TooEarly",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "TooLate",
+          inputs: [],
+        },
+      ],
+      inheritedFunctions: {},
+      deployedOnBlock: 40208100,
+    },
+    HousePool: {
+      address: "0x53e14755f5F9a338e40a03b9f432D2dC017ac807",
+      abi: [
+        {
+          type: "constructor",
+          inputs: [
+            {
+              name: "_usdc",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "_game",
+              type: "address",
+              internalType: "address",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "MIN_FIRST_DEPOSIT",
           inputs: [],
           outputs: [
             {
@@ -1272,63 +1328,8 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "canRoll",
-          inputs: [],
-          outputs: [
-            {
-              name: "",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
           name: "cancelWithdrawal",
           inputs: [],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "checkRoll",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              internalType: "address",
-            },
-            {
-              name: "secret",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "canCheck",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "isWinner",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
-          stateMutability: "view",
-        },
-        {
-          type: "function",
-          name: "cleanupExpiredCommit",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              internalType: "address",
-            },
-          ],
           outputs: [],
           stateMutability: "nonpayable",
         },
@@ -1344,43 +1345,6 @@ const deployedContracts = {
           ],
           outputs: [],
           stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "commitRoll",
-          inputs: [
-            {
-              name: "commitHash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "commits",
-          inputs: [
-            {
-              name: "",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [
-            {
-              name: "hash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "blockNumber",
-              type: "uint256",
-              internalType: "uint256",
-            },
-          ],
-          stateMutability: "view",
         },
         {
           type: "function",
@@ -1416,6 +1380,30 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "deposit",
+          inputs: [
+            {
+              name: "usdcAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "minSharesOut",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "shares",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "effectivePool",
           inputs: [],
           outputs: [
@@ -1429,34 +1417,13 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "getCommitment",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              internalType: "address",
-            },
-          ],
+          name: "game",
+          inputs: [],
           outputs: [
             {
-              name: "hash",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-            {
-              name: "blockNumber",
-              type: "uint256",
-              internalType: "uint256",
-            },
-            {
-              name: "canReveal",
-              type: "bool",
-              internalType: "bool",
-            },
-            {
-              name: "isExpired",
-              type: "bool",
-              internalType: "bool",
+              name: "",
+              type: "address",
+              internalType: "address",
             },
           ],
           stateMutability: "view",
@@ -1515,21 +1482,37 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "owner",
-          inputs: [],
-          outputs: [
+          name: "payout",
+          inputs: [
             {
-              name: "",
+              name: "player",
               type: "address",
               internalType: "address",
             },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
           ],
-          stateMutability: "view",
+          outputs: [],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
-          name: "renounceOwnership",
-          inputs: [],
+          name: "receivePayment",
+          inputs: [
+            {
+              name: "player",
+              type: "address",
+              internalType: "address",
+            },
+            {
+              name: "amount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
           outputs: [],
           stateMutability: "nonpayable",
         },
@@ -1544,25 +1527,6 @@ const deployedContracts = {
             },
           ],
           outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
-          name: "revealRoll",
-          inputs: [
-            {
-              name: "secret",
-              type: "bytes32",
-              internalType: "bytes32",
-            },
-          ],
-          outputs: [
-            {
-              name: "won",
-              type: "bool",
-              internalType: "bool",
-            },
-          ],
           stateMutability: "nonpayable",
         },
         {
@@ -1685,19 +1649,6 @@ const deployedContracts = {
         },
         {
           type: "function",
-          name: "transferOwnership",
-          inputs: [
-            {
-              name: "newOwner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-          outputs: [],
-          stateMutability: "nonpayable",
-        },
-        {
-          type: "function",
           name: "usdc",
           inputs: [],
           outputs: [
@@ -1727,6 +1678,25 @@ const deployedContracts = {
             },
           ],
           stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "withdraw",
+          inputs: [
+            {
+              name: "minUsdcOut",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "usdcOut",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "nonpayable",
         },
         {
           type: "function",
@@ -1822,45 +1792,7 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "OwnershipTransferred",
-          inputs: [
-            {
-              name: "previousOwner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "newOwner",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RollCommitted",
-          inputs: [
-            {
-              name: "player",
-              type: "address",
-              indexed: true,
-              internalType: "address",
-            },
-            {
-              name: "commitment",
-              type: "bytes32",
-              indexed: false,
-              internalType: "bytes32",
-            },
-          ],
-          anonymous: false,
-        },
-        {
-          type: "event",
-          name: "RollForfeited",
+          name: "PaymentReceived",
           inputs: [
             {
               name: "player",
@@ -1879,7 +1811,7 @@ const deployedContracts = {
         },
         {
           type: "event",
-          name: "RollRevealed",
+          name: "PayoutSent",
           inputs: [
             {
               name: "player",
@@ -1888,13 +1820,7 @@ const deployedContracts = {
               internalType: "address",
             },
             {
-              name: "won",
-              type: "bool",
-              indexed: false,
-              internalType: "bool",
-            },
-            {
-              name: "payout",
+              name: "amount",
               type: "uint256",
               indexed: false,
               internalType: "uint256",
@@ -2119,54 +2045,27 @@ const deployedContracts = {
         },
         {
           type: "error",
-          name: "InvalidReveal",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "NoCommitment",
-          inputs: [],
-        },
-        {
-          type: "error",
           name: "NoPendingWithdrawal",
           inputs: [],
         },
         {
           type: "error",
-          name: "OwnableInvalidOwner",
-          inputs: [
-            {
-              name: "owner",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "OwnableUnauthorizedAccount",
-          inputs: [
-            {
-              name: "account",
-              type: "address",
-              internalType: "address",
-            },
-          ],
-        },
-        {
-          type: "error",
-          name: "TooEarly",
-          inputs: [],
-        },
-        {
-          type: "error",
-          name: "TooLate",
+          name: "SlippageExceeded",
           inputs: [],
         },
         {
           type: "error",
           name: "TransferFailed",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "Unauthorized",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "WithdrawalAlreadyPending",
           inputs: [],
         },
         {
@@ -2181,12 +2080,21 @@ const deployedContracts = {
         },
         {
           type: "error",
+          name: "ZeroAddress",
+          inputs: [],
+        },
+        {
+          type: "error",
           name: "ZeroAmount",
+          inputs: [],
+        },
+        {
+          type: "error",
+          name: "ZeroShares",
           inputs: [],
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 40181608,
     },
   },
 } as const;

@@ -237,6 +237,35 @@ function main() {
     });
   });
 
+  // Add contracts from deployments.json that weren't in broadcast
+  // (e.g., contracts deployed internally by other contracts)
+  Object.entries(deployments).forEach(([chainId, deployment]) => {
+    Object.entries(deployment).forEach(([address, contractName]) => {
+      if (address === "networkName") return;
+      
+      // Check if this contract is already in allGeneratedContracts
+      if (!allGeneratedContracts[chainId]) {
+        allGeneratedContracts[chainId] = {};
+      }
+      
+      const existingContract = Object.values(allGeneratedContracts[chainId]).find(
+        (c) => c.address.toLowerCase() === address.toLowerCase()
+      );
+      
+      if (!existingContract) {
+        // Contract not in broadcast, try to add it from artifact
+        const artifact = getArtifactOfContract(contractName);
+        if (artifact) {
+          allGeneratedContracts[chainId][contractName] = {
+            address: address,
+            abi: artifact.abi,
+            inheritedFunctions: getInheritedFunctions(artifact),
+          };
+        }
+      }
+    });
+  });
+
   const NEXTJS_TARGET_DIR = "../nextjs/contracts/";
 
   // Ensure target directories exist
