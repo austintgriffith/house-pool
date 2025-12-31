@@ -2,6 +2,8 @@
 
 > An example of how to build your USDC app on top of existing DeFi to earn yield on your game treasury.
 
+**🎮 Live Demo: [rollhouse.austingriffith.eth.link](https://rollhouse.austingriffith.eth.link/)**
+
 Deposit USDC to become the house. LP tokens = ownership. Idle funds auto-invest in Summer.fi to earn yield while you wait for bets.
 
 ## Architecture
