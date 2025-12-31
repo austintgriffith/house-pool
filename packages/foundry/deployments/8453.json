@@ -1,3 +1,6 @@
 {
+  "0x24a2CA2735993d5f08c1c65E14170eEAEab2fE33": "HousePool",
+  "0x8a9b434f3069B808aC585C495B034571FCc4090a": "VaultManager",
+  "0x93a7CAb5C016511016918e50F9E693396C7802e2": "DiceGame",
   "networkName": "base"
 }
