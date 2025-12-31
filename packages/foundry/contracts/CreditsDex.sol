@@ -223,6 +223,15 @@ contract CreditsDex {
         return usdcExcess;
     }
 
+    /// @notice Preview how much USDC is required for a given credit deposit
+    /// @param creditAmount The number of credits to deposit
+    /// @return assetRequired The amount of USDC required
+    function previewDeposit(uint256 creditAmount) public view returns (uint256 assetRequired) {
+        uint256 creditTokenReserve = creditToken.balanceOf(address(this));
+        uint256 totalAssetBalance = assetToken.balanceOf(address(this));
+        return (creditAmount * totalAssetBalance) / creditTokenReserve;
+    }
+
     /// @notice Internal helper to add USDC - fills excess first, overflow to reserves
     /// @param amount The amount of USDC being added
     function _addUsdc(uint256 amount) internal {
@@ -355,8 +364,9 @@ contract CreditsDex {
     ///      USDC fills excess first (up to cap), then overflows to reserves.
     ///      This means LP deposits when excess is full will increase CREDITS price.
     /// @param creditTokenDeposited The number of credit tokens to deposit
+    /// @param maxAssetTokens Maximum USDC willing to deposit (slippage protection, 0 = no limit)
     /// @return liquidityMinted The amount of liquidity tokens minted
-    function deposit(uint256 creditTokenDeposited) public returns (uint256 liquidityMinted) {
+    function deposit(uint256 creditTokenDeposited, uint256 maxAssetTokens) public returns (uint256 liquidityMinted) {
         if (creditTokenDeposited == 0) revert ZeroQuantityError();
 
         uint256 creditTokenReserve = creditToken.balanceOf(address(this));
@@ -364,6 +374,9 @@ contract CreditsDex {
         
         // Calculate required asset tokens based on TOTAL pool ratio (reserves + excess)
         uint256 assetTokenDeposited = (creditTokenDeposited * totalAssetBalance) / creditTokenReserve;
+
+        // Slippage protection - revert if required USDC exceeds max
+        if (maxAssetTokens > 0 && assetTokenDeposited > maxAssetTokens) revert SlippageError();
 
         liquidityMinted = (creditTokenDeposited * totalLiquidity) / creditTokenReserve;
 

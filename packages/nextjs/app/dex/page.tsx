@@ -173,10 +173,10 @@ const DexPage: NextPage = () => {
         args: [dexContract.address, INITIAL_USDC],
       });
 
-      // 3. Init DEX with liquidity
+      // 3. Init DEX with liquidity (credits, reserves, excess=0)
       await writeDex({
         functionName: "init",
-        args: [INITIAL_CREDITS, INITIAL_USDC],
+        args: [INITIAL_CREDITS, INITIAL_USDC, 0n],
       });
 
       refetchAll();
@@ -207,10 +207,10 @@ const DexPage: NextPage = () => {
         args: [dexContract.address, usdcToApprove],
       });
 
-      // 3. Deposit
+      // 3. Deposit with slippage protection (pass 0n for no limit)
       await writeDex({
         functionName: "deposit",
-        args: [creditsToDeposit],
+        args: [creditsToDeposit, 0n],
       });
 
       setDepositAmount("");

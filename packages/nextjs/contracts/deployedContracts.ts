@@ -7,7 +7,7 @@ import { GenericContractsDeclaration } from "~~/utils/scaffold-eth/contract";
 const deployedContracts = {
   31337: {
     Credits: {
-      address: "0xf82586fcb7918c94077fdd4e8a52cb1eed300e17",
+      address: "0xa422c8c8c57a25584c5848521c3dc4966650a81a",
       abi: [
         {
           type: "constructor",
@@ -810,10 +810,10 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 40173548,
+      deployedOnBlock: 40173569,
     },
     CreditsDex: {
-      address: "0xdb700f00d85ca9da27f840c08abaf833837d8aa4",
+      address: "0xa3f13114029db8dd9cfcbd1bd9d373a855f86cb0",
       abi: [
         {
           type: "constructor",
@@ -830,6 +830,58 @@ const deployedContracts = {
             },
           ],
           stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
+          name: "EXCESS_CAP",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "ROLL_COST",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "ROLL_MODULO",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "ROLL_PAYOUT",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
         },
         {
           type: "function",
@@ -990,6 +1042,11 @@ const deployedContracts = {
               type: "uint256",
               internalType: "uint256",
             },
+            {
+              name: "maxAssetTokens",
+              type: "uint256",
+              internalType: "uint256",
+            },
           ],
           outputs: [
             {
@@ -1054,6 +1111,19 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "getExcess",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "getLiquidity",
           inputs: [
             {
@@ -1073,6 +1143,32 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "getTotalUsdc",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "getUsdcReserves",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
           name: "init",
           inputs: [
             {
@@ -1081,7 +1177,12 @@ const deployedContracts = {
               internalType: "uint256",
             },
             {
-              name: "assetTokenAmount",
+              name: "assetReservesAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+            {
+              name: "assetExcessAmount",
               type: "uint256",
               internalType: "uint256",
             },
@@ -1108,6 +1209,25 @@ const deployedContracts = {
           outputs: [
             {
               name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "previewDeposit",
+          inputs: [
+            {
+              name: "creditAmount",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          outputs: [
+            {
+              name: "assetRequired",
               type: "uint256",
               internalType: "uint256",
             },
@@ -1145,7 +1265,33 @@ const deployedContracts = {
         },
         {
           type: "function",
+          name: "roll",
+          inputs: [],
+          outputs: [
+            {
+              name: "won",
+              type: "bool",
+              internalType: "bool",
+            },
+          ],
+          stateMutability: "nonpayable",
+        },
+        {
+          type: "function",
           name: "totalLiquidity",
+          inputs: [],
+          outputs: [
+            {
+              name: "",
+              type: "uint256",
+              internalType: "uint256",
+            },
+          ],
+          stateMutability: "view",
+        },
+        {
+          type: "function",
+          name: "usdcExcess",
           inputs: [],
           outputs: [
             {
@@ -1244,6 +1390,31 @@ const deployedContracts = {
         },
         {
           type: "event",
+          name: "Roll",
+          inputs: [
+            {
+              name: "_player",
+              type: "address",
+              indexed: true,
+              internalType: "address",
+            },
+            {
+              name: "_won",
+              type: "bool",
+              indexed: false,
+              internalType: "bool",
+            },
+            {
+              name: "_payout",
+              type: "uint256",
+              indexed: false,
+              internalType: "uint256",
+            },
+          ],
+          anonymous: false,
+        },
+        {
+          type: "event",
           name: "TokenSwap",
           inputs: [
             {
@@ -1312,7 +1483,7 @@ const deployedContracts = {
         },
       ],
       inheritedFunctions: {},
-      deployedOnBlock: 40173549,
+      deployedOnBlock: 40173569,
     },
   },
 } as const;

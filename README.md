@@ -2,7 +2,7 @@
 
 > **D**IFFERENT + **A**utomated **M**arket **M**aker (some crying in the casino)
 
-A hybrid DEX and gambling protocol where **CREDITS token holders are the house**. LP providers get exposure to both swap fees AND casino profits.
+A hybrid DEX and gambling protocol where **CREDITS token holders are the house**. LPs earn swap fees but also provide the house's bankroll (the excess buffer) - they take on the gambling risk in exchange for their share of any profits.
 
 ## Core Concept
 
@@ -107,19 +107,35 @@ The hybrid DEX + Casino contract:
 
 ## LP Economics
 
+**LPs get a raw deal compared to simple token holders.** Here's the honest breakdown:
+
 When you provide liquidity:
 
 1. **Deposit ratio** = Total pool (reserves + excess) / CREDITS
 2. **Your USDC** fills excess first, then overflows to reserves
 3. **If excess is full**, all your USDC goes to reserves → **price increases**
 
-This is intentional: **more LP capital = stronger house = higher CREDITS value**
-
 When you withdraw:
 
 1. You receive **proportional share** of reserves + excess
 2. Excess is reduced proportionally
 3. Price stays stable
+
+### The Tradeoff
+
+| Role                        | What You Get                                | What You Risk                           |
+| --------------------------- | ------------------------------------------- | --------------------------------------- |
+| **CREDITS holder** (non-LP) | Token appreciation when house profits       | Token depreciation if reserves depleted |
+| **LP**                      | 0.3% swap fees + proportional share of pool | Your capital IS the house bankroll      |
+
+**The catch:** LPs are literally funding the gambling buffer. When the house wins, profits sit in excess (which LPs own proportionally) and eventually overflow to reserves (appreciating CREDITS). But LPs provided that capital in the first place - they're not getting "free" exposure to casino profits, they're taking the risk.
+
+**Why LP anyway?**
+
+- Swap fees (0.3% on every trade)
+- In the long run, the 9% house edge should grow the pool
+- Your USDC share grows as the house profits
+- CREDITS token price appreciation benefits everyone
 
 ## Gambling Mechanics
 
