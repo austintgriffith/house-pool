@@ -3,11 +3,10 @@ pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "@openzeppelin/contracts/access/Ownable.sol";
 
 /// @title HousePool - Simplified gambling pool where LP tokens = house ownership
 /// @notice Deposit USDC to become the house. Share price grows as house profits.
-contract HousePool is ERC20, Ownable {
+contract HousePool is ERC20 {
     /* ========== CUSTOM ERRORS ========== */
     error InsufficientPool();
     error NoCommitment();
@@ -66,14 +65,13 @@ contract HousePool is ERC20, Ownable {
     event WithdrawalExpiredCleanup(address indexed lp, uint256 shares);
     event Withdraw(address indexed lp, uint256 sharesIn, uint256 usdcOut);
     event RollCommitted(address indexed player, bytes32 commitment);
-    event RollForfeited(address indexed player, uint256 amount);
     event RollRevealed(address indexed player, bool won, uint256 payout);
 
     /* ========== CONSTRUCTOR ========== */
     
     constructor(
         address _usdc
-    ) ERC20("HouseShare", "HOUSE") Ownable(msg.sender) {
+    ) ERC20("HouseShare", "HOUSE") {
         usdc = IERC20(_usdc);
     }
 
@@ -203,23 +201,6 @@ contract HousePool is ERC20, Ownable {
         });
         
         emit RollCommitted(msg.sender, commitHash);
-    }
-
-    /// @notice Clean up expired commit (after 256 blocks) - stake is forfeited to house
-    /// @dev Anyone can call this to clean up expired commits. Player forfeits their stake.
-    /// @param player The player whose expired commit to clean up
-    function cleanupExpiredCommit(address player) external {
-        Commitment memory c = commits[player];
-        
-        if (c.blockNumber == 0) revert NoCommitment();
-        if (block.number <= c.blockNumber + 256) revert TooEarly(); // Must wait for expiry
-        
-        delete commits[player];
-        
-        // Stake stays in pool - house wins by default
-        // No refund! You snooze, you lose.
-        
-        emit RollForfeited(player, ROLL_COST);
     }
     
     /// @notice Step 2: Reveal secret after 1+ block, within 256 blocks
